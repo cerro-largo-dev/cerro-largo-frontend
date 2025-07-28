@@ -1,0 +1,460 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Aceguá",
+        "id": 1,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.75000000000001,
+              -32.85
+            ],
+            [
+              -54.550000000000004,
+              -32.85
+            ],
+            [
+              -54.550000000000004,
+              -32.65
+            ],
+            [
+              -54.75000000000001,
+              -32.65
+            ],
+            [
+              -54.75000000000001,
+              -32.85
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Arbolito",
+        "id": 2,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.45,
+              -32.85
+            ],
+            [
+              -54.25,
+              -32.85
+            ],
+            [
+              -54.25,
+              -32.65
+            ],
+            [
+              -54.45,
+              -32.65
+            ],
+            [
+              -54.45,
+              -32.85
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Bañado de Medina",
+        "id": 3,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.150000000000006,
+              -32.85
+            ],
+            [
+              -53.95,
+              -32.85
+            ],
+            [
+              -53.95,
+              -32.65
+            ],
+            [
+              -54.150000000000006,
+              -32.65
+            ],
+            [
+              -54.150000000000006,
+              -32.85
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Cerro de las Cuentas",
+        "id": 4,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -53.85,
+              -32.85
+            ],
+            [
+              -53.65,
+              -32.85
+            ],
+            [
+              -53.65,
+              -32.65
+            ],
+            [
+              -53.85,
+              -32.65
+            ],
+            [
+              -53.85,
+              -32.85
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Fraile Muerto",
+        "id": 5,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.75000000000001,
+              -32.55
+            ],
+            [
+              -54.550000000000004,
+              -32.55
+            ],
+            [
+              -54.550000000000004,
+              -32.349999999999994
+            ],
+            [
+              -54.75000000000001,
+              -32.349999999999994
+            ],
+            [
+              -54.75000000000001,
+              -32.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Isidoro Noblía",
+        "id": 6,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.45,
+              -32.55
+            ],
+            [
+              -54.25,
+              -32.55
+            ],
+            [
+              -54.25,
+              -32.349999999999994
+            ],
+            [
+              -54.45,
+              -32.349999999999994
+            ],
+            [
+              -54.45,
+              -32.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Lago Merín",
+        "id": 7,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.150000000000006,
+              -32.55
+            ],
+            [
+              -53.95,
+              -32.55
+            ],
+            [
+              -53.95,
+              -32.349999999999994
+            ],
+            [
+              -54.150000000000006,
+              -32.349999999999994
+            ],
+            [
+              -54.150000000000006,
+              -32.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Las Cañas",
+        "id": 8,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -53.85,
+              -32.55
+            ],
+            [
+              -53.65,
+              -32.55
+            ],
+            [
+              -53.65,
+              -32.349999999999994
+            ],
+            [
+              -53.85,
+              -32.349999999999994
+            ],
+            [
+              -53.85,
+              -32.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Melo",
+        "id": 9,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.75000000000001,
+              -32.25
+            ],
+            [
+              -54.550000000000004,
+              -32.25
+            ],
+            [
+              -54.550000000000004,
+              -32.05
+            ],
+            [
+              -54.75000000000001,
+              -32.05
+            ],
+            [
+              -54.75000000000001,
+              -32.25
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Plácido Rosas",
+        "id": 10,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.45,
+              -32.25
+            ],
+            [
+              -54.25,
+              -32.25
+            ],
+            [
+              -54.25,
+              -32.05
+            ],
+            [
+              -54.45,
+              -32.05
+            ],
+            [
+              -54.45,
+              -32.25
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Río Branco",
+        "id": 11,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.150000000000006,
+              -32.25
+            ],
+            [
+              -53.95,
+              -32.25
+            ],
+            [
+              -53.95,
+              -32.05
+            ],
+            [
+              -54.150000000000006,
+              -32.05
+            ],
+            [
+              -54.150000000000006,
+              -32.25
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Toledo",
+        "id": 12,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -53.85,
+              -32.25
+            ],
+            [
+              -53.65,
+              -32.25
+            ],
+            [
+              -53.65,
+              -32.05
+            ],
+            [
+              -53.85,
+              -32.05
+            ],
+            [
+              -53.85,
+              -32.25
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Tupambaé",
+        "id": 13,
+        "department": "Cerro Largo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -54.75000000000001,
+              -31.95
+            ],
+            [
+              -54.550000000000004,
+              -31.95
+            ],
+            [
+              -54.550000000000004,
+              -31.749999999999996
+            ],
+            [
+              -54.75000000000001,
+              -31.749999999999996
+            ],
+            [
+              -54.75000000000001,
+              -31.95
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
