@@ -60,17 +60,17 @@ const MapComponent = () => {
 
   const loadZoneStates = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`);
-      const data = await response.json();
-      if (data.success) {
-        const states = {};
-        Object.entries(data.states).forEach(([zoneName, zoneData]) => {
-          states[zoneName] = zoneData.state;
+      const response = await fetch('https://j6h5i7c0dwyl.manus.space/api/admin/zones');
+      if (response.ok) {
+        const zones = await response.json();
+        const stateMap = {};
+        zones.forEach(zone => {
+          stateMap[zone.name] = zone.state;
         });
-        setZoneStates(states);
+        setZoneStates(stateMap);
       }
     } catch (error) {
-      console.error('Error cargando estados de zonas:', error);
+      console.error('Error loading zone states:', error);
     }
   };
 
@@ -166,24 +166,29 @@ const MapComponent = () => {
   // Función para descargar reporte - disponible para todos los usuarios
   const downloadReport = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/report/download`);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `reporte_camineria_cerro_largo_${new Date().toISOString().split('T')[0]}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
+      const response = await fetch('https://j6h5i7c0dwyl.manus.space/api/report/download');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'reporte_camineria_cerro_largo.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        console.error('Error downloading report');
+      }
     } catch (error) {
-      console.error('Error descargando reporte:', error);
+      console.error('Error downloading report:', error);
     }
-  };
+   };
 
   return (
-    <div className="relative h-screen w-full">
-      {/* Botón de descarga de reporte - visible para todos los usuarios */}
+    <div className="relative w-full h-screen">
+      {/* Botón de descarga de reportes - disponible para todos los usuarios */}
       <button
         onClick={downloadReport}
         className="absolute top-4 right-4 z-[1000] bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
