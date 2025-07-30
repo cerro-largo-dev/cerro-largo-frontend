@@ -20,7 +20,7 @@ const stateColors = {
   red: '#ef4444'      // Rojo - Suspendido
 };
 
-const BACKEND_URL = 'https://vgh0i1cok8qm.manus.space';
+const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
 
 const MapComponent = () => {
   const [geoData, setGeoData] = useState(null);
