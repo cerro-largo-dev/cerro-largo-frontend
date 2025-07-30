@@ -11,9 +11,16 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
+// Colores para estados de caminería (únicos colores que se mostrarán)
+const stateColors = {
+  green: '#22c55e',   // Verde - Habilitado
+  yellow: '#eab308',  // Amarillo - Alerta
+  red: '#ef4444'      // Rojo - Suspendido
+};
 
-const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
+const BACKEND_URL = 'https://vgh0i1cok8qm.manus.space';
 
 const MapComponent = () => {
   const [geoData, setGeoData] = useState(null);
