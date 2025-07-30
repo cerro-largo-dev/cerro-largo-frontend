@@ -60,7 +60,7 @@ const MapComponent = () => {
 
   const loadZoneStates = async () => {
     try {
-      const response = await fetch('https://j6h5i7c0dwyl.manus.space/api/admin/zones');
+      const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/zones');
       if (response.ok) {
         const zones = await response.json();
         const stateMap = {};
@@ -166,7 +166,7 @@ const MapComponent = () => {
   // Función para descargar reporte - disponible para todos los usuarios
   const downloadReport = async () => {
     try {
-      const response = await fetch('https://j6h5i7c0dwyl.manus.space/api/report/download');
+      const response = await fetch('https://cerro-largo-backend.onrender.com/api/report/download');
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
