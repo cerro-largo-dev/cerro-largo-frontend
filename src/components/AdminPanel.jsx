@@ -155,17 +155,14 @@ const AdminPanel = ({ onZoneStateChange }) => {
 
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-gray-700">Estado:</label>
-                <select
-                  value={selectedState}
-                  onChange={(e) => setSelectedState(e.target.value)}
-                  className="border border-gray-300 rounded px-3 py-2 text-sm"
-                >
-                  <option value="verde">🟩 Verde</option>
-                  <option value="amarillo">🟨 Amarillo</option>
-                  <option value="rojo">🟥 Rojo</option>
-                </select>
-              </div>
-
+         <select
+              value={selectedState}
+              onChange={(e) => setSelectedState(e.target.value)}
+              >
+                <option value="green">🟩 Verde</option>
+                <option value="yellow">🟨 Amarillo</option>
+                <option value="red">🟥 Rojo</option>
+              </select>
               <button
                 onClick={handleUpdateState}
                 disabled={!selectedZone || isLoading}
