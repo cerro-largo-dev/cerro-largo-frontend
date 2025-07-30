@@ -3,6 +3,8 @@ import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
 import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
+import AdminPanel from './AdminPanel';
+
 
 // Configurar iconos de Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
