@@ -11,17 +11,17 @@ const AdminPanel = ({ onZoneStateChange }) => {
 
   const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
 
-  const loadZones = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/zones`);
-      if (response.ok) {
-        const zonesData = await response.json();
-        setZones(zonesData);
-      }
-    } catch (error) {
-      console.error('Error loading zones:', error);
+const loadZones = async () => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`);
+    if (response.ok) {
+      const zonesData = await response.json();
+      setZones(zonesData.states); // Asignamos la propiedad "states" que viene del backend
     }
-  };
+  } catch (error) {
+    console.error('Error loading zones:', error);
+  }
+};
 
   const handleLogin = async () => {
     try {
