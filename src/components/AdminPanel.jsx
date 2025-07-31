@@ -49,15 +49,15 @@ const AdminPanel = ({ onZoneStateChange }) => {
   const handleUpdateState = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/update-state`, {
+      const response = await fetch(`${BACKEND_URL}/api/admin/zones/update-state`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          zone: selectedZone,
+          zone_name: selectedZone,
           state: selectedState
         }),
       });
@@ -155,28 +155,29 @@ const AdminPanel = ({ onZoneStateChange }) => {
 
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-gray-700">Estado:</label>
-         <select
-              value={selectedState}
-              onChange={(e) => setSelectedState(e.target.value)}
-              >
-                <option value="green">🟩 Verde</option>
-                <option value="yellow">🟨 Amarillo</option>
-                <option value="red">🟥 Rojo</option>
-              </select>
-              <button
-                onClick={handleUpdateState}
-                disabled={!selectedZone || isLoading}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors text-sm disabled:bg-gray-400"
-              >
-                {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
-              </button>
+                <select
+                  value={selectedState}
+                  onChange={(e) => setSelectedState(e.target.value)}
+                >
+                  <option value="green">🟩 Verde</option>
+                  <option value="yellow">🟨 Amarillo</option>
+                  <option value="red">🟥 Rojo</option>
+                </select>
+                <button
+                  onClick={handleUpdateState}
+                  disabled={!selectedZone || isLoading}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors text-sm disabled:bg-gray-400"
+                >
+                  {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
+                </button>
 
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors text-sm"
-              >
-                Cerrar Sesión
-              </button>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors text-sm"
+                >
+                  Cerrar Sesión
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -186,4 +187,3 @@ const AdminPanel = ({ onZoneStateChange }) => {
 };
 
 export default AdminPanel;
-
