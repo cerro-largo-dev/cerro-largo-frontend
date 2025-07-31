@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const AdminPanel = ({ onZoneStateChange }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -6,31 +6,34 @@ const AdminPanel = ({ onZoneStateChange }) => {
   const [password, setPassword] = useState('');
   const [zones, setZones] = useState([]);
   const [selectedZone, setSelectedZone] = useState('');
-  const [selectedState, setSelectedState] = useState('verde');
+  const [selectedState, setSelectedState] = useState('green');
   const [isLoading, setIsLoading] = useState(false);
 
   const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
 
-const loadZones = async () => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`);
-    if (response.ok) {
-      const zonesData = await response.json();
-      setZones(zonesData.states); // Asignamos la propiedad "states" que viene del backend
+  const loadZones = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`);
+      if (response.ok) {
+        const zonesData = await response.json();
+        setZones(zonesData.states); // Se asignan las zonas contenidas en la propiedad "states"
+      } else {
+        console.error('Error fetching zones: ', response.status);
+      }
+    } catch (error) {
+      console.error('Error loading zones:', error);
     }
-  } catch (error) {
-    console.error('Error loading zones:', error);
-  }
-};
+  };
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    e.preventDefault(); // Prevenir el comportamiento por defecto del formulario
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password })
       });
 
       if (response.ok) {
@@ -47,23 +50,24 @@ const loadZones = async () => {
   };
 
   const handleUpdateState = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Prevenir que se recargue la página
     setIsLoading(true);
-
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/zones/update-state`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           zone_name: selectedZone,
           state: selectedState
-        }),
+        })
       });
 
       if (response.ok) {
-        onZoneStateChange(selectedZone, selectedState);
+        if (onZoneStateChange) {
+          onZoneStateChange(selectedZone, selectedState);
+        }
         loadZones();
         alert('Estado actualizado correctamente');
       } else {
@@ -79,21 +83,24 @@ const loadZones = async () => {
 
   const handleLogout = async () => {
     try {
-      await fetch(`${BACKEND_URL}/api/admin/logout`, {
-        method: 'POST',
-        credentials: 'include'
+      const response = await fetch(`${BACKEND_URL}/api/admin/logout`, {
+        method: 'POST'
       });
-      setIsAuthenticated(false);
-      setIsVisible(false);
+      if (response.ok) {
+        setIsAuthenticated(false);
+        setIsVisible(false);
+      }
     } catch (error) {
-      console.error('Error en logout:', error);
+      console.error('Error durante el logout:', error);
     }
   };
 
+  // Cuando el panel no está visible, mostrar el botón "Admin" con type="button"
   if (!isVisible) {
     return (
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[1000]">
         <button
+          type="button"
           onClick={() => setIsVisible(true)}
           className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-gray-700 transition-colors"
         >
@@ -109,76 +116,75 @@ const loadZones = async () => {
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-800">Panel de Administrador</h3>
           <button
+            type="button"
             onClick={() => setIsVisible(false)}
-            className="text-gray-600 hover:text-gray-800 text-xl"
+            className="text-gray-600 hover:text-gray-800"
           >
-            ✕
+            Cerrar
           </button>
         </div>
 
         {!isAuthenticated ? (
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700">Contraseña:</label>
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-2 text-sm"
-              placeholder="Ingresa la contraseña"
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              placeholder="Ingrese la contraseña"
+              className="border border-gray-300 rounded px-3 py-2"
             />
             <button
-              onClick={handleLogin}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm"
+              type="submit"
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
             >
               Ingresar
             </button>
-          </div>
+          </form>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Zona:</label>
+          <div className="flex flex-col gap-4">
+            <form onSubmit={handleUpdateState} className="flex flex-col gap-4">
+              <div className="flex flex-col">
+                <label className="text-gray-700">Zona:</label>
                 <select
                   value={selectedZone}
                   onChange={(e) => setSelectedZone(e.target.value)}
-                  className="border border-gray-300 rounded px-3 py-2 text-sm"
+                  className="border border-gray-300 rounded px-3 py-2"
                 >
-                  <option value="">Seleccionar zona</option>
-                  {zones.map((zone) => (
-                    <option key={zone.name} value={zone.name}>
-                      {zone.name} - {zone.state === 'verde' ? '🟩' : zone.state === 'amarillo' ? '🟨' : '🟥'}
+                  <option value="">Seleccione una zona</option>
+                  {zones && zones.map((zone, index) => (
+                    <option key={index} value={zone.name}>
+                      {zone.name}
                     </option>
                   ))}
                 </select>
               </div>
-
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Estado:</label>
+              <div className="flex flex-col">
+                <label className="text-gray-700">Estado:</label>
                 <select
                   value={selectedState}
                   onChange={(e) => setSelectedState(e.target.value)}
+                  className="border border-gray-300 rounded px-3 py-2"
                 >
-                  <option value="green">🟩 Verde</option>
-                  <option value="yellow">🟨 Amarillo</option>
-                  <option value="red">🟥 Rojo</option>
+                  <option value="green">Green</option>
+                  <option value="yellow">Yellow</option>
+                  <option value="red">Red</option>
                 </select>
-                <button
-                  onClick={handleUpdateState}
-                  disabled={!selectedZone || isLoading}
-                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors text-sm disabled:bg-gray-400"
-                >
-                  {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors text-sm"
-                >
-                  Cerrar Sesión
-                </button>
               </div>
-            </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
+              >
+                {isLoading ? 'Actualizando...' : 'Actualizar'}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors"
+            >
+              Logout
+            </button>
           </div>
         )}
       </div>
