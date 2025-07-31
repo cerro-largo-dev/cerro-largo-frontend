@@ -13,7 +13,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
 
   const loadZones = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`);
+      const response = await fetch(`${BACKEND_URL}/api/admin/states`);
       if (response.ok) {
         const zonesData = await response.json();
         setZones(zonesData.states); // Se asignan las zonas contenidas en la propiedad "states"
