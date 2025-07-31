@@ -61,7 +61,7 @@ const MapComponent = () => {
 
   const loadZoneStates = async () => {
     try {
-      const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/zones');
+const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/zones/states');
       if (response.ok) {
         const zones = await response.json();
         const stateMap = {};
