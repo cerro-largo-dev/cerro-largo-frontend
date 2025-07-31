@@ -11,12 +11,58 @@ const AdminPanel = ({ onZoneStateChange }) => {
 
   const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
 
+  // Mapeo de estados frontend -> backend
+  const stateMapping = {
+    'verde': 'green',
+    'amarillo': 'yellow',
+    'rojo': 'red'
+  };
+
+  // Mapeo inverso backend -> frontend
+  const reverseStateMapping = {
+    'green': 'verde',
+    'yellow': 'amarillo', 
+    'red': 'rojo'
+  };
+
+  // Verificar autenticación al cargar el componente
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/admin/check-auth`, {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setIsAuthenticated(data.authenticated);
+          if (data.authenticated) {
+            loadZones();
+          }
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error);
+      }
+    };
+    
+    checkAuth();
+  }, []);
+
   const loadZones = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/zones`);
+      // CORRECCIÓN: Ruta correcta para obtener zonas
+      const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`, {
+        credentials: 'include'
+      });
       if (response.ok) {
-        const zonesData = await response.json();
-        setZones(zonesData);
+        const result = await response.json();
+        if (result.success && result.states) {
+          // Convertir el objeto de estados a array para el frontend
+          const zonesArray = Object.entries(result.states).map(([name, data]) => ({
+            name: name,
+            state: reverseStateMapping[data.state] || data.state
+          }));
+          setZones(zonesArray);
+        }
       }
     } catch (error) {
       console.error('Error loading zones:', error);
@@ -25,18 +71,25 @@ const AdminPanel = ({ onZoneStateChange }) => {
 
   const handleLogin = async () => {
     try {
+      // CORRECCIÓN: Agregar credentials para mantener sesión
       const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ password }),
       });
 
       if (response.ok) {
-        setIsAuthenticated(true);
-        setPassword('');
-        loadZones();
+        const result = await response.json();
+        if (result.success) {
+          setIsAuthenticated(true);
+          setPassword('');
+          loadZones();
+        } else {
+          alert(result.message || 'Error en la autenticación');
+        }
       } else {
         alert('Contraseña incorrecta');
       }
@@ -49,23 +102,31 @@ const AdminPanel = ({ onZoneStateChange }) => {
   const handleUpdateState = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/update-state`, {
+      // CORRECCIÓN: Ruta correcta y parámetros correctos
+      const response = await fetch(`${BACKEND_URL}/api/admin/zones/update-state`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
-          zone: selectedZone,
-          state: selectedState
+          zone_name: selectedZone,  // CORRECCIÓN: zone -> zone_name
+          state: stateMapping[selectedState]  // CORRECCIÓN: mapear estado al formato del backend
         }),
       });
 
       if (response.ok) {
-        onZoneStateChange(selectedZone, selectedState);
-        loadZones();
-        alert('Estado actualizado correctamente');
+        const result = await response.json();
+        if (result.success) {
+          // Convertir el estado de vuelta al formato del frontend para el callback
+          onZoneStateChange(selectedZone, selectedState);
+          loadZones();
+          alert('Estado actualizado correctamente');
+        } else {
+          alert(result.message || 'Error al actualizar el estado');
+        }
       } else {
         alert('Error al actualizar el estado');
       }
@@ -189,4 +250,3 @@ const AdminPanel = ({ onZoneStateChange }) => {
 };
 
 export default AdminPanel;
-
