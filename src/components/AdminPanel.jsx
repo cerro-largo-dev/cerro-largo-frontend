@@ -1,186 +1,199 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useApi, ZoneData } from '../hooks/useApi';
+import { Lock, Unlock, Save, LogOut } from 'lucide-react';
 
-const AdminPanel = ({ onZoneStateChange }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
-  const [zones, setZones] = useState([]);
-  const [selectedZone, setSelectedZone] = useState('');
-  const [selectedState, setSelectedState] = useState('verde');
-  const [isLoading, setIsLoading] = useState(false);
+interface AdminPanelProps {
+  zones: ZoneData;
+  onZoneStateChange: (zoneName: string, newState: 'green' | 'yellow' | 'red') => void;
+}
 
-  const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
+const AdminPanel: React.FC<AdminPanelProps> = ({ zones, onZoneStateChange }) => {
+  const { isAuthenticated, adminLogin, adminLogout, updateZoneState } = useApi();
+  const [showPanel, setShowPanel] = useState(false);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const loadZones = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/zones`);
-      if (response.ok) {
-        const zonesData = await response.json();
-        setZones(zonesData);
-      }
-    } catch (error) {
-      console.error('Error loading zones:', error);
-    }
-  };
-
-  const handleLogin = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password }),
-      });
-
-      if (response.ok) {
-        setIsAuthenticated(true);
-        setPassword('');
-        loadZones();
-      } else {
-        alert('Contraseña incorrecta');
-      }
-    } catch (error) {
-      console.error('Error during login:', error);
-      alert('Error de conexión');
-    }
-  };
-
-  const handleUpdateState = async (e) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setLoginError('');
     
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/update-state`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          zone: selectedZone,
-          state: selectedState
-        }),
-      });
-
-      if (response.ok) {
-        onZoneStateChange(selectedZone, selectedState);
-        loadZones();
-        alert('Estado actualizado correctamente');
-      } else {
-        alert('Error al actualizar el estado');
-      }
-    } catch (error) {
-      console.error('Error updating state:', error);
-      alert('Error de conexión');
-    } finally {
-      setIsLoading(false);
+    const result = await adminLogin(loginForm.username, loginForm.password);
+    
+    if (result.success) {
+      setShowPanel(true);
+      setLoginForm({ username: '', password: '' });
+    } else {
+      setLoginError(result.message);
     }
   };
 
   const handleLogout = async () => {
-    try {
-      await fetch(`${BACKEND_URL}/api/admin/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      setIsAuthenticated(false);
-      setIsVisible(false);
-    } catch (error) {
-      console.error('Error en logout:', error);
+    await adminLogout();
+    setShowPanel(false);
+  };
+
+  const handleStateChange = async (zoneName: string, newState: 'green' | 'yellow' | 'red') => {
+    setSaving(true);
+    const result = await updateZoneState(zoneName, newState);
+    
+    if (result.success) {
+      onZoneStateChange(zoneName, newState);
+    } else {
+      alert(`Error: ${result.message}`);
+    }
+    setSaving(false);
+  };
+
+  const getStateLabel = (state: string) => {
+    switch (state) {
+      case 'green': return '🟩 Habilitado';
+      case 'yellow': return '🟨 Alerta';
+      case 'red': return '🟥 Suspendido';
+      default: return '⚪ Sin estado';
     }
   };
 
-  if (!isVisible) {
+  const getStateColor = (state: string) => {
+    switch (state) {
+      case 'green': return 'bg-green-100 border-green-500';
+      case 'yellow': return 'bg-yellow-100 border-yellow-500';
+      case 'red': return 'bg-red-100 border-red-500';
+      default: return 'bg-gray-100 border-gray-500';
+    }
+  };
+
+  if (!isAuthenticated) {
     return (
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[1000]">
+      <div className="fixed top-4 left-4 z-[1000]">
         <button
-          onClick={() => setIsVisible(true)}
-          className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-gray-700 transition-colors"
+          onClick={() => setShowPanel(!showPanel)}
+          className="bg-blue-600 text-white p-3 rounded-lg shadow-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
-          ▲ Admin
+          <Lock size={20} />
+          Admin
         </button>
+
+        {showPanel && (
+          <div className="absolute top-full left-0 mt-2 bg-white p-6 rounded-lg shadow-xl border min-w-[300px]">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Acceso de Administrador</h3>
+            
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Usuario
+                </label>
+                <input
+                  type="text"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contraseña
+                </label>
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              {loginError && (
+                <div className="text-red-600 text-sm">{loginError}</div>
+              )}
+              
+              <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Unlock size={16} />
+                Ingresar
+              </button>
+            </form>
+            
+            <div className="mt-4 text-xs text-gray-500 text-center">
+              Usuario: admin | Contraseña: admin123
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 shadow-lg z-[1000] p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Panel de Administrador</h3>
-          <button
-            onClick={() => setIsVisible(false)}
-            className="text-gray-600 hover:text-gray-800 text-xl"
-          >
-            ✕
-          </button>
-        </div>
+    <div className="fixed top-4 left-4 z-[1000]">
+      <button
+        onClick={() => setShowPanel(!showPanel)}
+        className="bg-green-600 text-white p-3 rounded-lg shadow-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+      >
+        <Unlock size={20} />
+        Panel Admin
+      </button>
 
-        {!isAuthenticated ? (
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700">Contraseña:</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-2 text-sm"
-              placeholder="Ingresa la contraseña"
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-            />
-            <button
-              onClick={handleLogin}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm"
-            >
-              Ingresar
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Zona:</label>
-                <select
-                  value={selectedZone}
-                  onChange={(e) => setSelectedZone(e.target.value)}
-                  className="border border-gray-300 rounded px-3 py-2 text-sm"
-                >
-                  <option value="">Seleccionar zona</option>
-                  {zones.map((zone) => (
-                    <option key={zone.name} value={zone.name}>
-                      {zone.name} - {zone.state === 'verde' ? '🟩' : zone.state === 'amarillo' ? '🟨' : '🟥'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Estado:</label>
-         <select
-              value={selectedState}
-              onChange={(e) => setSelectedState(e.target.value)}
-              >
-                <option value="green">🟩 Verde</option>
-                <option value="yellow">🟨 Amarillo</option>
-                <option value="red">🟥 Rojo</option>
-              </select>
-              <button
-                onClick={handleUpdateState}
-                disabled={!selectedZone || isLoading}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors text-sm disabled:bg-gray-400"
-              >
-                {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
-              </button>
-
+      {showPanel && (
+        <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl border max-w-sm max-h-96 overflow-y-auto">
+          <div className="p-4 border-b bg-gray-50">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-800">Control de Estados</h3>
               <button
                 onClick={handleLogout}
-                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors text-sm"
+                className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm"
               >
-                Cerrar Sesión
+                <LogOut size={16} />
+                Salir
               </button>
             </div>
           </div>
-        )}
-      </div>
+          
+          <div className="p-4 space-y-3">
+            {Object.entries(zones).map(([zoneName, zoneData]) => (
+              <div key={zoneName} className={`p-3 rounded-lg border ${getStateColor(zoneData.state)}`}>
+                <div className="font-medium text-sm text-gray-800 mb-2">{zoneName}</div>
+                <div className="text-xs text-gray-600 mb-2">
+                  Estado actual: {getStateLabel(zoneData.state)}
+                </div>
+                
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleStateChange(zoneName, 'green')}
+                    disabled={saving || zoneData.state === 'green'}
+                    className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Verde
+                  </button>
+                  <button
+                    onClick={() => handleStateChange(zoneName, 'yellow')}
+                    disabled={saving || zoneData.state === 'yellow'}
+                    className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Amarillo
+                  </button>
+                  <button
+                    onClick={() => handleStateChange(zoneName, 'red')}
+                    disabled={saving || zoneData.state === 'red'}
+                    className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Rojo
+                  </button>
+                </div>
+                
+                {zoneData.updated_at && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Actualizado: {new Date(zoneData.updated_at).toLocaleString('es-UY')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
