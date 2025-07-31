@@ -1,23 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const AdminPanel = ({ onZoneStateChange }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [zones, setZones] = useState([]);
+  const [zones, setZones] = useState([]); // Arreglo de municipios
   const [selectedZone, setSelectedZone] = useState('');
   const [selectedState, setSelectedState] = useState('green');
   const [isLoading, setIsLoading] = useState(false);
 
   const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
 
-  // Función para cargar las zonas usando el endpoint correcto
+  // Función para cargar las zonas (municipios)
   const loadZones = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`);
       if (response.ok) {
         const zonesData = await response.json();
-        setZones(zonesData.states); // Se espera que el JSON tenga una propiedad "states"
+        // Supongamos que el backend retorna: { success: true, states: { "MUNICIPIO_A": { state: "green" }, "MUNICIPIO_B": { state: "red" } } }
+        // Convertimos el objeto a un arreglo para poder iterar sobre él en el select.
+        if (zonesData.success && zonesData.states) {
+          const zonesObject = zonesData.states;
+          const zonesArray = Object.keys(zonesObject).map((name) => ({
+            name,
+            ...zonesObject[name],
+          }));
+          setZones(zonesArray);
+        } else {
+          console.error('Respuesta inesperada en zonesData:', zonesData);
+        }
       } else {
         console.error('Error fetching zones:', response.status);
       }
@@ -26,7 +37,14 @@ const AdminPanel = ({ onZoneStateChange }) => {
     }
   };
 
-  // Maneja el login, utilizando preventDefault para evitar submit no deseado
+  // Si ya está autenticado, se carga la lista de zonas al montar el componente
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadZones();
+    }
+  }, [isAuthenticated]);
+
+  // Maneja el login, utilizando preventDefault para evitar el submit no deseado
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -41,7 +59,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
       if (response.ok) {
         setIsAuthenticated(true);
         setPassword('');
-        loadZones();
+        // loadZones() se ejecutará en el useEffect al actualizar isAuthenticated
       } else {
         alert('Contraseña incorrecta');
       }
@@ -71,6 +89,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
         if (onZoneStateChange) {
           onZoneStateChange(selectedZone, selectedState);
         }
+        // Recargar las zonas después de la actualización
         loadZones();
         alert('Estado actualizado correctamente');
       } else {
@@ -99,7 +118,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
     }
   };
 
-  // Cuando el panel no está visible, mostramos sólo el botón "Admin" con el estilo adecuado
+  // Cuando el panel no está visible, mostramos solo el botón "Admin"
   if (!isVisible) {
     return (
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[1000]">
@@ -114,7 +133,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
     );
   }
 
-  // Panel completo de administrador (login, update de zona y logout)
+  // Panel completo de administrador
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 shadow-lg z-[1000] p-4">
       <div className="max-w-4xl mx-auto">
@@ -149,18 +168,22 @@ const AdminPanel = ({ onZoneStateChange }) => {
           <div className="flex flex-col gap-4">
             <form onSubmit={handleUpdateState} className="flex flex-col gap-4">
               <div className="flex flex-col">
-                <label className="text-gray-700">Zona:</label>
+                <label className="text-gray-700">Zona (Municipio):</label>
                 <select
                   value={selectedZone}
                   onChange={(e) => setSelectedZone(e.target.value)}
                   className="border border-gray-300 rounded px-3 py-2"
                 >
                   <option value="">Seleccione una zona</option>
-                  {zones && zones.map((zone, index) => (
-                    <option key={index} value={zone.name}>
-                      {zone.name}
-                    </option>
-                  ))}
+                  {zones.length > 0 ? (
+                    zones.map((zone, index) => (
+                      <option key={index} value={zone.name}>
+                        {zone.name} {/* Puedes mostrar incluso zone.state si es necesario */}
+                      </option>
+                    ))
+                  ) : (
+                    <option disabled>No se encontraron municipios</option>
+                  )}
                 </select>
               </div>
               <div className="flex flex-col">
