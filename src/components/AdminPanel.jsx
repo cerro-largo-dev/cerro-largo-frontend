@@ -11,22 +11,24 @@ const AdminPanel = ({ onZoneStateChange }) => {
 
   const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
 
+  // Función para cargar las zonas usando el endpoint correcto
   const loadZones = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/zones/states`);
       if (response.ok) {
         const zonesData = await response.json();
-        setZones(zonesData.states); // Se asignan las zonas contenidas en la propiedad "states"
+        setZones(zonesData.states); // Se espera que el JSON tenga una propiedad "states"
       } else {
-        console.error('Error fetching zones: ', response.status);
+        console.error('Error fetching zones:', response.status);
       }
     } catch (error) {
       console.error('Error loading zones:', error);
     }
   };
 
+  // Maneja el login, utilizando preventDefault para evitar submit no deseado
   const handleLogin = async (e) => {
-    e.preventDefault(); // Prevenir el comportamiento por defecto del formulario
+    e.preventDefault();
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
         method: 'POST',
@@ -49,8 +51,9 @@ const AdminPanel = ({ onZoneStateChange }) => {
     }
   };
 
+  // Maneja el update del estado para la zona seleccionada
   const handleUpdateState = async (e) => {
-    e.preventDefault(); // Prevenir que se recargue la página
+    e.preventDefault();
     setIsLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/zones/update-state`, {
@@ -81,6 +84,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
     }
   };
 
+  // Maneja el logout para finalizar la sesión del administrador
   const handleLogout = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/logout`, {
@@ -95,7 +99,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
     }
   };
 
-  // Cuando el panel no está visible, mostrar el botón "Admin" con type="button"
+  // Cuando el panel no está visible, mostramos sólo el botón "Admin" con el estilo adecuado
   if (!isVisible) {
     return (
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[1000]">
@@ -110,6 +114,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
     );
   }
 
+  // Panel completo de administrador (login, update de zona y logout)
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 shadow-lg z-[1000] p-4">
       <div className="max-w-4xl mx-auto">
@@ -133,7 +138,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
               placeholder="Ingrese la contraseña"
               className="border border-gray-300 rounded px-3 py-2"
             />
-            <button
+            <button 
               type="submit"
               className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
             >
