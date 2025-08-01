@@ -81,8 +81,6 @@ function AdminPanel({
 
     // Actualizar estado de zona individual
     const handleZoneStateUpdate = async (zoneName, newState) => {
-        console.log(`AdminPanel: Intentando actualizar zona ${zoneName} a estado ${newState}`);
-        
         if (!isAuthenticated) {
             setShowLoginModal(true);
             return;
@@ -90,8 +88,6 @@ function AdminPanel({
 
         try {
             setLoading(true);
-            console.log('AdminPanel: Enviando petición al backend...');
-            
             const response = await fetch(`${BACKEND_URL}api/admin/zones/update-state`, {
                 method: 'POST',
                 headers: {
@@ -104,18 +100,14 @@ function AdminPanel({
                 })
             });
 
-            console.log('AdminPanel: Respuesta del backend:', response.status);
-
             if (response.ok) {
                 // Sincronizar con el estado compartido
-                console.log('AdminPanel: Actualizando estado local mediante callback...');
                 if (onZoneStateChange) {
                     onZoneStateChange(zoneName, newState);
                 }
                 setMessage({ type: 'success', text: `Estado de ${zoneName} actualizado a ${newState}` });
             } else {
                 const errorData = await response.json();
-                console.error('AdminPanel: Error del backend:', errorData);
                 throw new Error(errorData.message || 'Error al actualizar estado de zona');
             }
         } catch (error) {
