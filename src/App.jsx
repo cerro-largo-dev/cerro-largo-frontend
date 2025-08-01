@@ -45,16 +45,11 @@ function App() {
       if (response.ok) {
         const data = await response.json();
         const stateMap = {};
-        
-        // Manejar diferentes formatos de respuesta del backend
-        if (data.zones && Array.isArray(data.zones)) {
-          data.zones.forEach(zone => {
-            stateMap[zone.name] = zone.state;
-          });
-        } else if (Array.isArray(data)) {
-          data.forEach(zone => {
-            stateMap[zone.zone_name] = zone.state;
-          });
+        // Manejar el formato de respuesta del backend (diccionario de estados)
+        if (data.states) {
+          for (const zoneName in data.states) {
+            stateMap[zoneName] = data.states[zoneName].state;
+          }
         }
         
         setZoneStates(stateMap);
