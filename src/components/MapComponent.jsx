@@ -184,6 +184,16 @@ function MapComponent({
         );
 
         layer.on({
+            mouseover: (e) => {
+                e.target.setStyle({
+                    fillOpacity: 0.8
+                });
+            },
+            mouseout: (e) => {
+                e.target.setStyle({
+                    fillOpacity: 0.6
+                });
+            },
             click: (e) => {
                 // La lógica de cambio de estado al hacer clic ha sido eliminada
                 // ya que esta funcionalidad debe ser manejada exclusivamente por el panel de administración.

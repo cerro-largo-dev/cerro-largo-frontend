@@ -70,14 +70,7 @@ function App() {
         onZonesLoad={handleZonesLoad}
       />
       
-      {/* Panel de Administración */}
-      <AdminPanel 
-        zoneStates={zoneStates}
-        zones={zones}
-        onZoneStateChange={handleZoneStateChange}
-        onBulkUpdate={handleBulkZoneStatesUpdate}
-        onRefresh={handleRefreshZoneStates}
-      />
+      {/* Panel de Administración (Eliminado) */}
     </div>
   );
 }
