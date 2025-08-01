@@ -22,15 +22,11 @@ function App() {
 
   // Callback para cuando AdminPanel o MapComponent realizan cambios individuales
   const handleZoneStateChange = (zoneName, newState) => {
-    console.log(`App.jsx: Actualizando zona ${zoneName} a estado ${newState}`);
-    setZoneStates(prevStates => {
-      const newStates = {
-        ...prevStates,
-        [zoneName]: newState
-      };
-      console.log('App.jsx: Nuevo estado completo:', newStates);
-      return newStates;
-    });
+    console.log(`Actualizando zona ${zoneName} a estado ${newState}`);
+    setZoneStates(prevStates => ({
+      ...prevStates,
+      [zoneName]: newState
+    }));
   };
 
   // Callback para actualizar múltiples zonas (bulk updates desde AdminPanel)
