@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import MapComponent from './components/MapComponent';
-import AdminPanel from './components/AdminPanel';
 import './App.css';
 
 function App() {
