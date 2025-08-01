@@ -302,7 +302,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
           onClick={() => setIsVisible(true)}
           className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg shadow-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium flex items-center gap-2"
         >
-          Panel de Administración
+          Administración
           <span>▲</span>
         </button>
       </div>
