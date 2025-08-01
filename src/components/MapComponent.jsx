@@ -105,8 +105,14 @@ function MapComponent({
                 console.log('Respuesta del backend:', data);
                 const stateMap = {};
                 
-                // Manejar diferentes formatos de respuesta del backend
-                if (data.zones && Array.isArray(data.zones)) {
+                // CORRECCIÓN: Manejar el formato real del backend
+                if (data.states && typeof data.states === 'object') {
+                    console.log('Formato: data.states objeto (formato correcto del backend)');
+                    // El backend devuelve: { states: { "ZONA": { state: "green", ... }, ... } }
+                    Object.keys(data.states).forEach(zoneName => {
+                        stateMap[zoneName] = data.states[zoneName].state;
+                    });
+                } else if (data.zones && Array.isArray(data.zones)) {
                     console.log('Formato: data.zones array');
                     data.zones.forEach(zone => {
                         stateMap[zone.name] = zone.state;
@@ -122,7 +128,7 @@ function MapComponent({
                     Object.assign(stateMap, data);
                 }
                 
-                console.log('Estados mapeados:', stateMap);
+                console.log('Estados mapeados correctamente:', stateMap);
                 
                 // CAMBIO: Notificar al componente padre en lugar de actualizar estado local
                 if (onZoneStatesLoad) {
