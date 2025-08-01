@@ -1,427 +1,239 @@
 import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import L from 'leaflet';
+import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
+import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
+import AdminPanel from './AdminPanel';
+
+
+// Configurar iconos de Leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Colores para estados de caminería (únicos colores que se mostrarán)
+const stateColors = {
+  green: '#22c55e',   // Verde - Habilitado
+  yellow: '#eab308',  // Amarillo - Alerta
+  red: '#ef4444'      // Rojo - Suspendido
+};
 
 const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
 
-function AdminPanel({ 
-    zoneStates,           // <- RECIBIR ESTADO COMPARTIDO
-    onZoneStateChange,    // <- CALLBACK PARA CAMBIOS INDIVIDUALES
-    onBulkUpdate,         // <- CALLBACK PARA CAMBIOS MÚLTIPLES
-    zones                 // <- LISTA DE ZONAS DISPONIBLES
-}) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [message, setMessage] = useState({ type: '', text: '' });
-    const [loading, setLoading] = useState(false);
-    const [selectedZones, setSelectedZones] = useState([]);
-    const [bulkState, setBulkState] = useState('green');
-    const [showBulkModal, setShowBulkModal] = useState(false);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [password, setPassword] = useState('');
-    const [showLoginModal, setShowLoginModal] = useState(false);
+const MapComponent = () => {
+  const [geoData, setGeoData] = useState(null);
+  const [meloAreaGeoData, setMeloAreaGeoData] = useState(null);
+  const [zoneStates, setZoneStates] = useState({});
+  const [zones, setZones] = useState([]);
 
-    // Verificar autenticación al cargar el componente
-    useEffect(() => {
-        checkAuthentication();
-    }, []);
+  useEffect(() => {
+    Promise.all([
+      fetch(municipalitiesDataUrl).then(res => res.json()),
+      fetch(meloAreaSeriesDataUrl).then(res => res.json())
+    ])
+    .then(([municipalitiesData, meloData]) => {
+      setGeoData(municipalitiesData);
+      setMeloAreaGeoData(meloData);
 
-    const checkAuthentication = async () => {
-        try {
-            const response = await fetch(`${BACKEND_URL}api/admin/check-auth`, {
-                credentials: 'include'
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setIsAuthenticated(data.authenticated);
-            }
-        } catch (error) {
-            console.error('Error checking authentication:', error);
-        }
+      const allZones = [];
+      
+      municipalitiesData.features.forEach((feature) => {
+        const zoneName = feature.properties.municipio;
+        allZones.push(zoneName);
+      });
+      
+      // Add Melo area to zones
+      meloData.features.forEach((feature) => {
+        const zoneName = `Melo (${feature.properties.serie})`;
+        allZones.push(zoneName);
+      });
+      
+      setZones(allZones);
+      
+      // Cargar estados de zonas desde el backend
+      loadZoneStates();
+    })
+    .catch(error => console.error("Error cargando GeoJSON:", error));
+  }, []);
+
+  const loadZoneStates = async () => {
+    try {
+const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/zones/states');
+      if (response.ok) {
+        const zones = await response.json();
+        const stateMap = {};
+        zones.forEach(zone => {
+          stateMap[zone.name] = zone.state;
+        });
+        setZoneStates(stateMap);
+      }
+    } catch (error) {
+      console.error('Error loading zone states:', error);
+    }
+  };
+
+  const handleZoneStateChange = (zoneName, newState) => {
+    setZoneStates(prev => ({
+      ...prev,
+      [zoneName]: newState
+    }));
+  };
+
+  const getFeatureStyle = (feature) => {
+    let zoneName;
+    
+    if (feature.properties.municipio) {
+      zoneName = feature.properties.municipio;
+    } else if (feature.properties.serie) {
+      zoneName = `Melo (${feature.properties.serie})`;
+    }
+    
+    // Solo usar colores de estado asignados por el administrador
+    const stateColor = zoneStates[zoneName] || 'green'; // Por defecto verde
+    const finalColor = stateColors[stateColor];
+    
+    return {
+      fillColor: finalColor,
+      weight: 2,
+      opacity: 1,
+      color: '#333',
+      dashArray: '',
+      fillOpacity: 0.6
     };
+  };
 
-    const handleLogin = async () => {
-        try {
-            setLoading(true);
-            const response = await fetch(`${BACKEND_URL}api/admin/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ password })
-            });
-
-            if (response.ok) {
-                setIsAuthenticated(true);
-                setShowLoginModal(false);
-                setPassword('');
-                setMessage({ type: 'success', text: 'Autenticación exitosa' });
-            } else {
-                setMessage({ type: 'error', text: 'Contraseña incorrecta' });
-            }
-        } catch (error) {
-            console.error('Error during login:', error);
-            setMessage({ type: 'error', text: 'Error al autenticar' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleLogout = async () => {
-        try {
-            await fetch(`${BACKEND_URL}api/admin/logout`, {
-                method: 'POST',
-                credentials: 'include'
-            });
-            setIsAuthenticated(false);
-            setIsOpen(false);
-            setMessage({ type: 'success', text: 'Sesión cerrada' });
-        } catch (error) {
-            console.error('Error during logout:', error);
-        }
-    };
-
-    // Actualizar estado de zona individual
-    const handleZoneStateUpdate = async (zoneName, newState) => {
-        if (!isAuthenticated) {
-            setShowLoginModal(true);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const response = await fetch(`${BACKEND_URL}api/admin/zones/update-state`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    zone_name: zoneName,
-                    state: newState
-                })
-            });
-
-            if (response.ok) {
-                // Sincronizar con el estado compartido
-                if (onZoneStateChange) {
-                    onZoneStateChange(zoneName, newState);
-                }
-                setMessage({ type: 'success', text: `Estado de ${zoneName} actualizado a ${newState}` });
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Error al actualizar estado de zona');
-            }
-        } catch (error) {
-            console.error('Error updating zone state:', error);
-            setMessage({ type: 'error', text: error.message || 'Error al actualizar estado de zona' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Actualización múltiple de zonas
-    const handleBulkZoneUpdate = async () => {
-        if (!isAuthenticated) {
-            setShowLoginModal(true);
-            return;
-        }
-
-        if (selectedZones.length === 0) {
-            setMessage({ type: 'error', text: 'Selecciona al menos una zona' });
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const updates = selectedZones.map(zoneName => ({
-                zone_name: zoneName,
-                state: bulkState
-            }));
-
-            const response = await fetch(`${BACKEND_URL}api/admin/zones/bulk-update`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({ updates })
-            });
-
-            if (response.ok) {
-                // Convertir updates array a objeto para el estado
-                const updatedStates = {};
-                updates.forEach(update => {
-                    updatedStates[update.zone_name] = update.state;
-                });
-
-                // Sincronizar con el estado compartido
-                if (onBulkUpdate) {
-                    onBulkUpdate(updatedStates);
-                }
-                
-                setMessage({ type: 'success', text: `${selectedZones.length} zonas actualizadas correctamente` });
-                setSelectedZones([]);
-                setShowBulkModal(false);
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Error en actualización múltiple');
-            }
-        } catch (error) {
-            console.error('Error in bulk update:', error);
-            setMessage({ type: 'error', text: error.message || 'Error en actualización múltiple' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleZoneSelection = (zoneName, isSelected) => {
-        if (isSelected) {
-            setSelectedZones(prev => [...prev, zoneName]);
-        } else {
-            setSelectedZones(prev => prev.filter(zone => zone !== zoneName));
-        }
-    };
-
-    const selectAllZones = () => {
-        setSelectedZones([...zones]);
-    };
-
-    const deselectAllZones = () => {
-        setSelectedZones([]);
-    };
-
-    const getStateColor = (state) => {
-        switch (state) {
-            case 'green': return '#22c55e';
-            case 'yellow': return '#eab308';
-            case 'red': return '#ef4444';
-            default: return '#22c55e';
-        }
-    };
-
-    const getStateLabel = (state) => {
-        switch (state) {
-            case 'green': return 'Habilitado';
-            case 'yellow': return 'Alerta';
-            case 'red': return 'Suspendido';
-            default: return 'Habilitado';
-        }
-    };
-
-    if (!isOpen) {
-        return (
-            <button
-                onClick={() => setIsOpen(true)}
-                className="fixed bottom-4 left-4 z-[1000] bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-indigo-700"
-            >
-                Panel Administración
-            </button>
-        );
+  const onEachFeature = (feature, layer) => {
+    let name, department, area, zoneName;
+    
+    if (feature.properties.municipio) {
+      name = feature.properties.municipio;
+      zoneName = name;
+      department = feature.properties.depto;
+      area = feature.properties.area_km2 ? feature.properties.area_km2.toFixed(2) : 'N/A';
+    } else if (feature.properties.serie) {
+      name = `Melo (${feature.properties.serie})`;
+      zoneName = name;
+      department = feature.properties.depto || 'CERRO LARGO';
+      area = 'N/A';
     }
 
+    const currentState = zoneStates[zoneName] || 'green';
+    const stateLabel = {
+      green: '🟩 Habilitado',
+      yellow: '🟨 Alerta',
+      red: '🟥 Suspendido'
+    }[currentState];
+
+    layer.bindPopup(`
+      <div class="municipality-popup">
+        <h3>${name}</h3>
+        <p><strong>Departamento:</strong> ${department}</p>
+        <p><strong>Área:</strong> ${area} km²</p>
+        <p><strong>Estado:</strong> ${stateLabel}</p>
+      </div>
+    `);
+
+    layer.on({
+      mouseover: function(e) {
+        const layer = e.target;
+        layer.setStyle({
+          weight: 3,
+          color: '#666',
+          dashArray: '',
+          fillOpacity: 0.8
+        });
+        layer.bringToFront();
+      },
+      mouseout: function(e) {
+        const layer = e.target;
+        layer.setStyle(getFeatureStyle(feature));
+      }
+    });
+  };
+
+  const mapCenter = [-32.8, -54.2]; // Ajustado para Cerro Largo
+
+  if (!geoData || !meloAreaGeoData) {
     return (
-        <>
-            <div className="fixed bottom-4 left-4 top-4 w-80 bg-white shadow-xl rounded-lg z-[1000] overflow-hidden">
-                <div className="bg-indigo-600 text-white p-4 flex justify-between items-center">
-                    <h2 className="text-lg font-semibold">Panel de Administración</h2>
-                    <button
-                        onClick={() => setIsOpen(false)}
-                        className="text-white hover:text-gray-200"
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                <div className="p-4 h-full overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-                    {/* Mensajes */}
-                    {message.text && (
-                        <div className={`mb-4 p-3 rounded ${
-                            message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                            {message.text}
-                            <button 
-                                onClick={() => setMessage({ type: '', text: '' })}
-                                className="ml-2 text-sm font-bold"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Estado de autenticación */}
-                    <div className="mb-4 p-3 bg-gray-100 rounded">
-                        {isAuthenticated ? (
-                            <div className="flex justify-between items-center">
-                                <span className="text-green-600">✓ Autenticado</span>
-                                <button
-                                    onClick={handleLogout}
-                                    className="text-sm bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-                                >
-                                    Cerrar Sesión
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="text-center">
-                                <span className="text-red-600">✗ No autenticado</span>
-                                <button
-                                    onClick={() => setShowLoginModal(true)}
-                                    className="block w-full mt-2 bg-indigo-500 text-white px-3 py-2 rounded hover:bg-indigo-600"
-                                >
-                                    Iniciar Sesión
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Acciones de administración */}
-                    {isAuthenticated && (
-                        <>
-                            <div className="mb-4">
-                                <div className="flex gap-2 mb-2">
-                                    <button
-                                        onClick={selectAllZones}
-                                        className="text-sm bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600"
-                                    >
-                                        Seleccionar Todas
-                                    </button>
-                                    <button
-                                        onClick={deselectAllZones}
-                                        className="text-sm bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600"
-                                    >
-                                        Deseleccionar
-                                    </button>
-                                </div>
-                                
-                                {selectedZones.length > 0 && (
-                                    <button
-                                        onClick={() => setShowBulkModal(true)}
-                                        className="w-full bg-orange-500 text-white px-3 py-2 rounded hover:bg-orange-600"
-                                    >
-                                        Actualizar {selectedZones.length} zonas
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Lista de zonas */}
-                            <div className="space-y-2">
-                                <h3 className="font-semibold text-gray-700">Estados de Zonas:</h3>
-                                {zones.map((zoneName) => (
-                                    <div key={zoneName} className="border rounded p-2">
-                                        <div className="flex items-center mb-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedZones.includes(zoneName)}
-                                                onChange={(e) => handleZoneSelection(zoneName, e.target.checked)}
-                                                className="mr-2"
-                                            />
-                                            <span className="text-sm font-medium flex-1">{zoneName}</span>
-                                            <div 
-                                                className="w-4 h-4 rounded-full"
-                                                style={{ backgroundColor: getStateColor(zoneStates[zoneName] || 'green') }}
-                                            ></div>
-                                        </div>
-                                        
-                                        <div className="text-xs text-gray-600 mb-2">
-                                            Estado: {getStateLabel(zoneStates[zoneName] || 'green')}
-                                        </div>
-                                        
-                                        <div className="flex gap-1">
-                                            <button
-                                                onClick={() => handleZoneStateUpdate(zoneName, 'green')}
-                                                className="flex-1 text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 disabled:opacity-50"
-                                                disabled={loading || zoneStates[zoneName] === 'green'}
-                                            >
-                                                Habilitar
-                                            </button>
-                                            <button
-                                                onClick={() => handleZoneStateUpdate(zoneName, 'yellow')}
-                                                className="flex-1 text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 disabled:opacity-50"
-                                                disabled={loading || zoneStates[zoneName] === 'yellow'}
-                                            >
-                                                Alerta
-                                            </button>
-                                            <button
-                                                onClick={() => handleZoneStateUpdate(zoneName, 'red')}
-                                                className="flex-1 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 disabled:opacity-50"
-                                                disabled={loading || zoneStates[zoneName] === 'red'}
-                                            >
-                                                Suspender
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* Modal de login */}
-            {showLoginModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1001]">
-                    <div className="bg-white p-6 rounded-lg w-80">
-                        <h3 className="text-lg font-semibold mb-4">Autenticación de Administrador</h3>
-                        <input
-                            type="password"
-                            placeholder="Contraseña"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full p-2 border rounded mb-4"
-                            onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                        />
-                        <div className="flex gap-2">
-                            <button
-                                onClick={handleLogin}
-                                className="flex-1 bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600 disabled:opacity-50"
-                                disabled={loading}
-                            >
-                                {loading ? 'Autenticando...' : 'Ingresar'}
-                            </button>
-                            <button
-                                onClick={() => setShowLoginModal(false)}
-                                className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal de actualización múltiple */}
-            {showBulkModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1001]">
-                    <div className="bg-white p-6 rounded-lg w-80">
-                        <h3 className="text-lg font-semibold mb-4">Actualización Múltiple</h3>
-                        <p className="mb-4">Actualizar {selectedZones.length} zonas seleccionadas al estado:</p>
-                        <select
-                            value={bulkState}
-                            onChange={(e) => setBulkState(e.target.value)}
-                            className="w-full p-2 border rounded mb-4"
-                        >
-                            <option value="green">Habilitado</option>
-                            <option value="yellow">Alerta</option>
-                            <option value="red">Suspendido</option>
-                        </select>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={handleBulkZoneUpdate}
-                                className="flex-1 bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 disabled:opacity-50"
-                                disabled={loading}
-                            >
-                                {loading ? 'Actualizando...' : 'Actualizar'}
-                            </button>
-                            <button
-                                onClick={() => setShowBulkModal(false)}
-                                className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Cargando mapa...</div>
+      </div>
     );
-}
+  }
 
-export default AdminPanel;
+  // Función para descargar reporte - disponible para todos los usuarios
+  const downloadReport = async () => {
+    try {
+      const response = await fetch('https://cerro-largo-backend.onrender.com/api/report/download');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'reporte_camineria_cerro_largo.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        console.error('Error downloading report');
+      }
+    } catch (error) {
+      console.error('Error downloading report:', error);
+    }
+   };
+
+  return (
+    <div className="relative w-full h-screen">
+      {/* Botón de descarga de reportes - disponible para todos los usuarios */}
+      <button
+        onClick={downloadReport}
+        className="absolute top-4 right-4 z-[1000] bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
+      >
+        📄 Descargar Reporte
+      </button>
+
+      {/* Panel de administrador */}
+      <AdminPanel 
+        onZoneStateChange={handleZoneStateChange}
+        zoneStates={zoneStates}
+        zones={zones}
+      />
+
+      <MapContainer
+        center={mapCenter}
+        zoom={9}
+        className="leaflet-container"
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        
+        {geoData.features.length > 0 && (
+          <GeoJSON
+            data={geoData}
+            style={getFeatureStyle}
+            onEachFeature={onEachFeature}
+            key={`municipalities-${JSON.stringify(zoneStates)}`}
+          />
+        )}
+        
+        {meloAreaGeoData.features.length > 0 && (
+          <GeoJSON
+            data={meloAreaGeoData}
+            style={getFeatureStyle}
+            onEachFeature={onEachFeature}
+            key={`melo-${JSON.stringify(zoneStates)}`}
+          />
+        )}
+      </MapContainer>
+    </div>
+  );
+};
+
+export default MapComponent;
