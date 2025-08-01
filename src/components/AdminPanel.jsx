@@ -443,8 +443,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
-                  >
-                    Actualización Individual
+                  >    Actualización Individual
                   </button>
                   <button
                     onClick={() => setActiveTab('bulk')}
@@ -508,7 +507,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                       disabled={!selectedZone || isLoading}
                       className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
-                      {isLoading ? '⏳ Actualizando...' : 'Actualizar Estado'}
+                      {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
                     </button>
                   </div>
                   {selectedZone && (
@@ -527,7 +526,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                 <div className="space-y-6">
                   <div className="bg-gray-50 p-6 rounded-lg border">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-semibold text-gray-800">⚡ Actualización Masiva</h3>
+                      <h3 className="text-lg font-semibold text-gray-800">  Actualización Masiva</h3>
                       <div className="text-sm text-gray-600">
                         {selectedZones.size} de {filteredZones.length} zona(s) seleccionada(s)
                       </div>
