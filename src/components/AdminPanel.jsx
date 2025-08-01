@@ -329,9 +329,9 @@ const AdminPanel = ({ onZoneStateChange }) => {
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🏛️</span>
+              <span className="text-2xl"></span>
               <div>
-                <h2 className="text-2xl font-bold">Panel de Administración</h2>
+                <h2 className="text-2xl font-bold">Administración</h2>
                 <p className="text-blue-100">Sistema de Gestión de Caminería - Cerro Largo</p>
               </div>
             </div>
@@ -363,7 +363,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
             <div className="max-w-md mx-auto">
               <div className="bg-gray-50 p-8 rounded-lg border">
                 <div className="text-center mb-6">
-                  <span className="text-4xl mb-4 block">🔐</span>
+                  <span className="text-4xl mb-4 block"></span>
                   <h3 className="text-xl font-semibold text-gray-800 mb-2">Acceso Restringido</h3>
                   <p className="text-gray-600">Ingresa la contraseña de administrador</p>
                 </div>
@@ -387,7 +387,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                     disabled={isLoading || !password}
                     className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                   >
-                    {isLoading ? '⏳ Verificando...' : '🔓 Iniciar Sesión'}
+                    {isLoading ? 'Verificando...' : 'Iniciar Sesión'}
                   </button>
                 </div>
               </div>
@@ -399,12 +399,12 @@ const AdminPanel = ({ onZoneStateChange }) => {
               {statistics.state_summary && (
                 <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-lg border">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <span>📊</span> Estadísticas Generales
+                     Estadísticas Generales
                     <button
                       onClick={loadData}
                       className="ml-auto text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-200 transition-colors"
                     >
-                      🔄 Actualizar
+                       Actualizar
                     </button>
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -445,7 +445,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    🎯 Actualización Individual
+                    Actualización Individual
                   </button>
                   <button
                     onClick={() => setActiveTab('bulk')}
@@ -455,7 +455,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    ⚡ Actualización Masiva
+                    Actualización Masiva
                   </button>
                   <button
                     onClick={() => setActiveTab('reports')}
@@ -465,7 +465,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    📋 Reportes
+                    Reportes
                   </button>
                 </nav>
               </div>
@@ -509,13 +509,13 @@ const AdminPanel = ({ onZoneStateChange }) => {
                       disabled={!selectedZone || isLoading}
                       className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
-                      {isLoading ? '⏳ Actualizando...' : '✅ Actualizar Estado'}
+                      {isLoading ? '⏳ Actualizando...' : 'Actualizar Estado'}
                     </button>
                   </div>
                   {selectedZone && (
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg border">
                       <p className="text-sm text-blue-700">
-                        💡 <strong>{selectedZone}</strong> cambiará a: <strong>{stateLabels[selectedState].label}</strong>
+                        <strong>{selectedZone}</strong> cambiará a: <strong>{stateLabels[selectedState].label}</strong>
                         <br />
                         <span className="text-xs">{stateLabels[selectedState].description}</span>
                       </p>
@@ -635,7 +635,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                         onClick={handleDownloadReport}
                         className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium w-full"
                       >
-                        📥 Descargar Reporte PDF
+                        Descargar Reporte PDF
                       </button>
                     </div>
                     
@@ -669,7 +669,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
                   onClick={handleLogout}
                   className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
                 >
-                  🚪 Cerrar Sesión
+                  Cerrar Sesión
                 </button>
               </div>
             </div>
