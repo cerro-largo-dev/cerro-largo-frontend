@@ -92,7 +92,7 @@ const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin
     }
     
     // Solo usar colores de estado asignados por el administrador
-    const stateColor = zoneStates[zoneName] || 'green'; // Por defecto verde
+    const stateColor = zoneStates[zoneName];
     const finalColor = stateColors[stateColor];
     
     return {
