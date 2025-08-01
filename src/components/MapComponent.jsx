@@ -89,53 +89,30 @@ function MapComponent({
         loadData();
     }, []); // Carga inicial única
 
-    // useEffect para debugging cuando zoneStates cambia
-    useEffect(() => {
-        console.log('zoneStates actualizado:', zoneStates);
-        console.log('Número de zonas con estado:', Object.keys(zoneStates).length);
-    }, [zoneStates]);
-
     const loadZoneStates = async () => {
         try {
-            console.log('Cargando estados de zonas desde:', `${BACKEND_URL}api/admin/zones/states`);
             const response = await fetch(`${BACKEND_URL}api/admin/zones/states`);
-            
             if (response.ok) {
                 const data = await response.json();
-                console.log('Respuesta del backend:', data);
                 const stateMap = {};
                 
-                // CORRECCIÓN: Manejar el formato real del backend
-                if (data.states && typeof data.states === 'object') {
-                    console.log('Formato: data.states objeto (formato correcto del backend)');
-                    // El backend devuelve: { states: { "ZONA": { state: "green", ... }, ... } }
-                    Object.keys(data.states).forEach(zoneName => {
-                        stateMap[zoneName] = data.states[zoneName].state;
-                    });
-                } else if (data.zones && Array.isArray(data.zones)) {
-                    console.log('Formato: data.zones array');
+                // Manejar diferentes formatos de respuesta del backend
+                if (data.zones && Array.isArray(data.zones)) {
                     data.zones.forEach(zone => {
                         stateMap[zone.name] = zone.state;
                     });
                 } else if (Array.isArray(data)) {
-                    console.log('Formato: array directo');
                     data.forEach(zone => {
                         stateMap[zone.zone_name] = zone.state;
                     });
-                } else if (data && typeof data === 'object') {
-                    console.log('Formato: objeto directo');
-                    // Si es un objeto directo, copiarlo
-                    Object.assign(stateMap, data);
                 }
-                
-                console.log('Estados mapeados correctamente:', stateMap);
                 
                 // CAMBIO: Notificar al componente padre en lugar de actualizar estado local
                 if (onZoneStatesLoad) {
                     onZoneStatesLoad(stateMap);
                 }
             } else {
-                console.error("Failed to load zone states:", response.statusText, await response.text());
+                console.error("Failed to load zone states:", response.statusText);
                 setMessage({ type: 'error', text: 'Error al cargar estados de zonas' });
             }
         } catch (error) {
@@ -169,9 +146,6 @@ function MapComponent({
         // Usar zoneStates recibido como prop
         const stateColor = zoneStates[zoneName] || 'green'; // Por defecto verde
         const finalColor = stateColors[stateColor];
-
-        // Debug: Log para verificar los estados
-        console.log(`Zona: ${zoneName}, Estado: ${stateColor}, Color: ${finalColor}`);
 
         return {
             fillColor: finalColor,
@@ -286,43 +260,21 @@ function MapComponent({
             )}
 
             {/* Botones de control */}
-            <div className="absolute top-4 right-4 z-[1000] flex gap-2 flex-col">
-                <div className="flex gap-2">
-                    <button
-                        onClick={reloadMapData}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-green-700 disabled:opacity-50"
-                        disabled={loading}
-                    >
-                        {loading ? 'Actualizando...' : 'Actualizar Mapa'}
-                    </button>
-                    
-                    <button
-                        onClick={downloadReport}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50"
-                        disabled={loading}
-                    >
-                        {loading ? 'Descargando...' : 'Descargar Reporte'}
-                    </button>
-                </div>
-                
-                {/* Botón de debug */}
+            <div className="absolute top-4 right-4 z-[1000] flex gap-2">
                 <button
-                    onClick={() => {
-                        console.log('=== DEBUG INFO ===');
-                        console.log('zoneStates:', zoneStates);
-                        console.log('zones:', zones);
-                        console.log('geoData:', geoData);
-                        console.log('meloAreaGeoData:', meloAreaGeoData);
-                        // Test: Cambiar una zona aleatoriamente para testing
-                        if (zones.length > 0 && onZoneStateChange) {
-                            const randomZone = zones[0];
-                            console.log(`Probando cambio de ${randomZone} a yellow`);
-                            onZoneStateChange(randomZone, 'yellow');
-                        }
-                    }}
-                    className="bg-purple-600 text-white px-2 py-1 text-sm rounded shadow-lg hover:bg-purple-700"
+                    onClick={reloadMapData}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-green-700 disabled:opacity-50"
+                    disabled={loading}
                 >
-                    Debug Test
+                    {loading ? 'Actualizando...' : 'Actualizar Mapa'}
+                </button>
+                
+                <button
+                    onClick={downloadReport}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50"
+                    disabled={loading}
+                >
+                    {loading ? 'Descargando...' : 'Descargar Reporte'}
                 </button>
             </div>
 
@@ -341,7 +293,7 @@ function MapComponent({
                         data={geoData}
                         style={getFeatureStyle}
                         onEachFeature={onEachFeature}
-                        key={`municipalities-${Object.keys(zoneStates).length}-${JSON.stringify(zoneStates).slice(0, 50)}`}
+                        key={`municipalities-${JSON.stringify(zoneStates)}`}
                     />
                 )}
                 {meloAreaGeoData && meloAreaGeoData.features.length > 0 && (
@@ -349,7 +301,7 @@ function MapComponent({
                         data={meloAreaGeoData}
                         style={getFeatureStyle}
                         onEachFeature={onEachFeature}
-                        key={`melo-${Object.keys(zoneStates).length}-${JSON.stringify(zoneStates).slice(0, 50)}`}
+                        key={`melo-${JSON.stringify(zoneStates)}`}
                     />
                 )}
             </MapContainer>
