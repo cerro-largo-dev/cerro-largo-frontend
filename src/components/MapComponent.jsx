@@ -152,6 +152,15 @@ function MapComponent({
         };
     };
 
+    const getStateLabel = (state) => {
+        switch (state) {
+            case 'green': return 'Habilitado';
+            case 'yellow': return 'Alerta';
+            case 'red': return 'Suspendido';
+            default: return 'Desconocido';
+        }
+    };
+
     const onEachFeature = (feature, layer) => {
         let name, department, area, zoneName;
 
@@ -171,39 +180,14 @@ function MapComponent({
             `<b>${name}</b><br>` +
             `Departamento: ${department}<br>` +
             `Área: ${area} km²<br>` +
-            `Estado: ${zoneStates[zoneName] || 'verde'}`
+            `Estado: ${zoneStates[zoneName] ? getStateLabel(zoneStates[zoneName]) : 'Desconocido'}`
         );
 
         layer.on({
             click: (e) => {
-                const oldState = zoneStates[zoneName] || 'green';
-                const newState = (oldState === 'green') ? 'yellow' : ((oldState === 'yellow') ? 'red' : 'green');
-                
-                // CAMBIO: Usar callback del padre en lugar de estado local
-                if (onZoneStateChange) {
-                    onZoneStateChange(zoneName, newState);
-                }
-                
-                // Enviar estado al backend
-                fetch(`${BACKEND_URL}api/admin/zones/update-state`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ zone_name: zoneName, state: newState })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        console.error('Failed to update zone state on backend');
-                        setMessage({ type: 'error', text: 'Error al actualizar estado en el servidor' });
-                    } else {
-                        setMessage({ type: 'success', text: `Estado de ${zoneName} actualizado a ${newState}` });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error sending state to backend:', error);
-                    setMessage({ type: 'error', text: 'Error de conexión con el servidor' });
-                });
+                // La lógica de cambio de estado al hacer clic ha sido eliminada
+                // ya que esta funcionalidad debe ser manejada exclusivamente por el panel de administración.
+                // Los cambios de estado ahora solo se reflejarán desde el backend.
             }
         });
     };
