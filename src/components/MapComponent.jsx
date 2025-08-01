@@ -92,7 +92,7 @@ const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin
     }
     
     // Solo usar colores de estado asignados por el administrador
-    const stateColor = zoneStates[zoneName];
+    const stateColor = zoneStates[zoneName] || 'green'; // Por defecto verde
     const finalColor = stateColors[stateColor];
     
     return {
@@ -101,7 +101,7 @@ const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin
       opacity: 1,
       color: '#333',
       dashArray: '',
-      fillOpacity: 0.7
+      fillOpacity: 0.6
     };
   };
 
@@ -143,7 +143,7 @@ const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin
           weight: 3,
           color: '#666',
           dashArray: '',
-          fillOpacity: 0.9
+          fillOpacity: 0.8
         });
         layer.bringToFront();
       },
