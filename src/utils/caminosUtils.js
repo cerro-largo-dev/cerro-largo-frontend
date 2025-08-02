@@ -134,13 +134,13 @@ export const getRoadStyle = (feature, zoomLevel = 10) => {
     weight = baseWeight * 1.3; // Más grueso en zoom cercano
   }
   
-  // Color oscurecido basado en el color del mapa
-  const color = getDarkenedColor('#3B82F6'); // Azul oscurecido
+  // Color con transparencia para integrarse con la capa base
+  const color = '#333333'; // Color neutro oscuro
   
   return {
     color: color,
     weight: Math.max(0.5, weight), // Mínimo 0.5px
-    opacity: 0.8,
+    opacity: 0.6, // Más transparente para integrarse con la capa base
     dashArray: dashArray,
     lineCap: 'round',
     lineJoin: 'round'
@@ -160,7 +160,7 @@ export const createResponsiveRoadStyle = (map) => {
 };
 
 /**
- * Genera el contenido del popup para un camino
+ * Genera el contenido del popup para un camino (idéntico al formato de municipios)
  * @param {Object} feature - Feature GeoJSON del camino
  * @returns {string} - HTML del popup
  */
@@ -171,70 +171,14 @@ export const getRoadPopupContent = (feature) => {
   // Usar nombre si existe, sino usar código
   const displayName = props.nombre || props.codigo || 'Sin nombre';
   
-  // Función helper para formatear sentido
-  const formatSentido = (sentido) => {
-    if (!sentido) return '';
-    if (sentido.includes('AMBOS SENTIDOS')) return 'Doble vía';
-    if (sentido.includes('DIGITALIZACIÓN')) return 'Vía simple';
-    return sentido;
-  };
-  
-  // Función helper para formatear calzada
-  const formatCalzada = (calzada) => {
-    if (!calzada) return 'No especificada';
-    if (calzada.includes('SE VE CALZADA')) return 'Calzada asfaltada/pavimentada';
-    if (calzada.includes('SE VE HUELLA')) return 'Camino de tierra/huella';
-    if (calzada.includes('SE VE FAJA')) return 'Faja sin calzada';
-    if (calzada.includes('NO HAY FAJA')) return 'Sin infraestructura vial';
-    if (calzada.includes('OCULTAMIENTOS')) return 'No visible en imagen';
-    return calzada;
-  };
-  
-  return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; min-width: 220px; max-width: 320px;">
-      <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 12px; margin: -12px -16px 12px -16px; border-radius: 8px 8px 0 0;">
-        <h3 style="margin: 0; font-size: 16px; font-weight: 600;">
-          🛣️ ${displayName}
-        </h3>
-        ${props.numero ? `<p style="margin: 2px 0 0 0; font-size: 12px; opacity: 0.9;">Ruta N° ${props.numero}</p>` : ''}
-      </div>
-      
-      <div style="color: #374151; line-height: 1.4; font-size: 14px;">
-        <div style="display: flex; align-items: center; margin: 8px 0; padding: 6px; background: #f8fafc; border-radius: 4px;">
-          <span style="font-weight: 600; color: #059669;">📏 Longitud:</span>
-          <span style="margin-left: 8px; font-weight: 500; color: #047857;">${length} km</span>
-        </div>
-        
-        <div style="margin: 8px 0;">
-          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">🏷️ Código:</span> ${props.codigo || 'N/A'}</p>
-          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">🏛️ Jurisdicción:</span> ${props.jurisdiccion || 'N/A'}</p>
-          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">📋 Categoría:</span> ${props.categoria || 'N/A'}</p>
-        </div>
-        
-        <div style="margin: 8px 0; padding: 6px; background: #fef3c7; border-radius: 4px; border-left: 3px solid #f59e0b;">
-          <p style="margin: 2px 0;"><span style="font-weight: 500; color: #92400e;">🛤️ Tipo de vía:</span></p>
-          <p style="margin: 2px 0 0 0; color: #b45309; font-size: 13px;">${formatCalzada(props.calzada)}</p>
-        </div>
-        
-        ${props.sentido ? `
-        <div style="margin: 8px 0;">
-          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">🚗 Circulación:</span> ${formatSentido(props.sentido)}</p>
-        </div>
-        ` : ''}
-        
-        ${props.observaciones ? `
-        <div style="margin: 8px 0; padding: 6px; background: #eff6ff; border-radius: 4px; border-left: 3px solid #3b82f6;">
-          <p style="margin: 2px 0; font-weight: 500; color: #1e40af;">💬 Observaciones:</p>
-          <p style="margin: 2px 0 0 0; color: #1e40af; font-size: 13px;">${props.observaciones}</p>
-        </div>
-        ` : ''}
-        
-        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af;">
-          Fuente: ${props.fuente || 'No especificada'}${props.gid ? ` • ID: ${props.gid}` : ''}
-        </div>
-      </div>
-    </div>
-  `;
+  return (
+    `<b>${displayName}</b><br>` +
+    `Código: ${props.codigo || 'N/A'}<br>` +
+    `Longitud: ${length} km<br>` +
+    `Jurisdicción: ${props.jurisdiccion || 'N/A'}<br>` +
+    `Categoría: ${props.categoria || 'N/A'}<br>` +
+    `Tipo de calzada: ${props.calzada || 'N/A'}`
+  );
 };
 
 /**
@@ -243,11 +187,8 @@ export const getRoadPopupContent = (feature) => {
  * @param {Object} layer - Layer de Leaflet
  */
 export const onEachRoadFeature = (feature, layer) => {
-  // Configurar popup
-  layer.bindPopup(getRoadPopupContent(feature), {
-    maxWidth: 300,
-    className: 'road-popup'
-  });
+  // Configurar popup (idéntico al de municipios)
+  layer.bindPopup(getRoadPopupContent(feature));
   
   // Eventos de hover
   layer.on({
