@@ -3,6 +3,8 @@ import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
 import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
+import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
+import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
 // Configurar iconos de Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -29,6 +31,7 @@ function MapComponent({
 }) {
     const [geoData, setGeoData] = useState(null);
     const [meloAreaGeoData, setMeloAreaGeoData] = useState(null);
+    const [caminosData, setCaminosData] = useState(null);
     const [zones, setZones] = useState([]);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
@@ -41,19 +44,22 @@ function MapComponent({
                 setLoading(true);
                 
                 // Cargar datos GeoJSON
-                const [municipalitiesResponse, meloResponse] = await Promise.all([
+                const [municipalitiesResponse, meloResponse, caminosResponse] = await Promise.all([
                     fetch(municipalitiesDataUrl),
-                    fetch(meloAreaSeriesDataUrl)
+                    fetch(meloAreaSeriesDataUrl),
+                    fetch(caminosDataUrl)
                 ]);
 
-                if (municipalitiesResponse.ok && meloResponse.ok) {
-                    const [municipalitiesData, meloData] = await Promise.all([
+                if (municipalitiesResponse.ok && meloResponse.ok && caminosResponse.ok) {
+                    const [municipalitiesData, meloData, caminosDataJson] = await Promise.all([
                         municipalitiesResponse.json(),
-                        meloResponse.json()
+                        meloResponse.json(),
+                        caminosResponse.json()
                     ]);
 
                     setGeoData(municipalitiesData);
                     setMeloAreaGeoData(meloData);
+                    setCaminosData(caminosDataJson);
 
                     // Extraer nombres de zonas
                     let allZones = [];
@@ -291,6 +297,14 @@ function MapComponent({
                         style={getFeatureStyle}
                         onEachFeature={onEachFeature}
                         key={`melo-${JSON.stringify(zoneStates)}`}
+                    />
+                )}
+                {caminosData && caminosData.features.length > 0 && (
+                    <GeoJSON
+                        data={caminosData}
+                        style={getRoadStyle}
+                        onEachFeature={onEachRoadFeature}
+                        key="caminos-layer"
                     />
                 )}
             </MapContainer>
