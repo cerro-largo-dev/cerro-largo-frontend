@@ -185,10 +185,10 @@ function MapComponent({
         return {
             fillColor: finalColor,
             weight: 2,
-            opacity: 1,
-            color: '#333',
+            opacity: 0.9, // Borde con alta opacidad
+            color: finalColor, // Mismo color que el relleno
             dashArray: '',
-            fillOpacity: 0.6
+            fillOpacity: 0.6 // Relleno con menor opacidad
         };
     };
 
