@@ -161,7 +161,7 @@ function MapComponent({
         try {
             setLoading(true);
             await loadZoneStates();
-            setMessage({ type: 'success', text: 'Mapa actualizado correctamente' });
+            // setMessage({ type: 'success', text: 'Mapa actualizado correctamente' }); // Removido para evitar notificaciones innecesarias
         } catch (error) {
             console.error('Error reloading map:', error);
             setMessage({ type: 'error', text: 'Error al actualizar mapa' });
@@ -258,7 +258,7 @@ function MapComponent({
                 a.click();
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
-                setMessage({ type: 'success', text: 'Reporte descargado correctamente' });
+                // setMessage({ type: 'success', text: 'Reporte descargado correctamente' }); // Removido para evitar notificaciones innecesarias
             } else {
                 console.error('Failed downloading report');
                 setMessage({ type: 'error', text: 'Error al descargar reporte' });
