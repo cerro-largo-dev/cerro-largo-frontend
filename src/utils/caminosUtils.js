@@ -115,12 +115,12 @@ export const getRoadStyle = (feature, zoomLevel = 10) => {
   let dashArray = '';
   
   if (calzada.includes('SE VE CALZADA')) {
-    baseWeight = 2.5; // Caminos con calzada - más gruesos
+    baseWeight = 3; // Caminos con calzada - más gruesos (aumentado para mejor detección)
   } else if (calzada.includes('SE VE HUELLA')) {
-    baseWeight = 0.8; // Huellas - más delgados
+    baseWeight = 1.5; // Huellas - más delgados (aumentado para mejor detección)
     dashArray = '4, 4'; // Línea punteada para huellas
   } else {
-    baseWeight = 1.5; // Otros tipos - grosor intermedio
+    baseWeight = 2; // Otros tipos - grosor intermedio (aumentado para mejor detección)
     dashArray = '3, 3'; // Línea punteada para casos especiales
   }
   
@@ -139,7 +139,7 @@ export const getRoadStyle = (feature, zoomLevel = 10) => {
   
   return {
     color: color,
-    weight: Math.max(0.5, weight), // Mínimo 0.5px
+    weight: Math.max(1.5, weight), // Mínimo 1.5px para mejor detección de clics
     opacity: 0.6, // Más transparente para integrarse con la capa base
     dashArray: dashArray,
     lineCap: 'round',
@@ -182,7 +182,7 @@ export const getRoadPopupContent = (feature) => {
 };
 
 /**
- * Configura los eventos para cada feature de camino
+ * Configura los eventos para cada feature de camino con mejor detección de clics
  * @param {Object} feature - Feature GeoJSON
  * @param {Object} layer - Layer de Leaflet
  */
@@ -190,20 +190,58 @@ export const onEachRoadFeature = (feature, layer) => {
   // Configurar popup (idéntico al de municipios)
   layer.bindPopup(getRoadPopupContent(feature));
   
-  // Eventos de hover
+  // Mejorar la detección de clics usando doble capa
+  const originalWeight = layer.options.weight;
+  
+  // Después de que se añada al mapa, crear zona de detección ampliada
+  layer.on('add', function() {
+    // Configurar el elemento SVG para mejor detección
+    if (this._path) {
+      this._path.style.cursor = 'pointer';
+      
+      // Crear copia invisible para detección de clics (técnica estándar)
+      const clickLayer = this._path.cloneNode(true);
+      clickLayer.setAttribute('stroke', 'transparent');
+      clickLayer.setAttribute('stroke-width', Math.max(15, originalWeight * 6)); // Zona de clic amplia
+      clickLayer.setAttribute('fill', 'none');
+      clickLayer.style.pointerEvents = 'visibleStroke';
+      
+      // Insertar la zona de clic detrás del elemento visible
+      this._path.parentNode.insertBefore(clickLayer, this._path);
+      
+      // Transferir eventos de clic a la línea visible
+      const self = this;
+      clickLayer.addEventListener('click', function(e) {
+        e.stopPropagation();
+        self.openPopup();
+      });
+      
+      clickLayer.addEventListener('mouseover', function(e) {
+        self.fire('mouseover', e);
+      });
+      
+      clickLayer.addEventListener('mouseout', function(e) {
+        self.fire('mouseout', e);
+      });
+    }
+  });
+  
+  // Eventos de hover con mejor feedback visual
   layer.on({
     mouseover: (e) => {
-      const layer = e.target;
-      layer.setStyle({
-        weight: layer.options.weight + 2,
-        opacity: 1
+      const targetLayer = e.target;
+      targetLayer.setStyle({
+        weight: originalWeight + 2,
+        opacity: 1,
+        color: '#1e40af' // Color azul más visible en hover
       });
     },
     mouseout: (e) => {
-      const layer = e.target;
-      layer.setStyle({
-        weight: layer.options.weight - 2,
-        opacity: 0.8
+      const targetLayer = e.target;
+      targetLayer.setStyle({
+        weight: originalWeight,
+        opacity: 0.6,
+        color: '#333333' // Volver al color original
       });
     }
   });

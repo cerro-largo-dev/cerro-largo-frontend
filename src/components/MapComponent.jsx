@@ -339,6 +339,10 @@ function MapComponent({
                         style={getRoadStyleWithZoom}
                         onEachFeature={onEachRoadFeature}
                         key={`caminos-layer-zoom-${currentZoom}`}
+                        pathOptions={{
+                            interactive: true,
+                            bubblingMouseEvents: false
+                        }}
                     />
                 )}
                 <ZoomHandler onZoomChange={handleZoomChange} />
