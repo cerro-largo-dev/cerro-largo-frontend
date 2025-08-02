@@ -101,26 +101,37 @@ export const getDarkenedColor = (baseColor = '#8B5CF6') => {
 };
 
 /**
- * Obtiene el estilo para un camino basado en sus propiedades
+ * Obtiene el estilo para un camino basado en sus propiedades y zoom level
  * @param {Object} feature - Feature GeoJSON del camino
+ * @param {number} zoomLevel - Nivel de zoom actual del mapa (opcional)
  * @returns {Object} - Estilo de Leaflet
  */
-export const getRoadStyle = (feature) => {
+export const getRoadStyle = (feature, zoomLevel = 10) => {
   const properties = feature.properties;
   const calzada = properties.calzada || '';
   
-  // Determinar grosor basado en tipo de calzada
-  let weight;
+  // Determinar grosor base según tipo de calzada
+  let baseWeight;
   let dashArray = '';
   
   if (calzada.includes('SE VE CALZADA')) {
-    weight = 3; // Caminos con calzada - más gruesos
+    baseWeight = 2.5; // Caminos con calzada - más gruesos
   } else if (calzada.includes('SE VE HUELLA')) {
-    weight = 1; // Huellas - más delgados
-    dashArray = '5, 5'; // Línea punteada para huellas
+    baseWeight = 0.8; // Huellas - más delgados
+    dashArray = '4, 4'; // Línea punteada para huellas
   } else {
-    weight = 2; // Otros tipos - grosor intermedio
+    baseWeight = 1.5; // Otros tipos - grosor intermedio
     dashArray = '3, 3'; // Línea punteada para casos especiales
+  }
+  
+  // Ajustar grosor según zoom level
+  let weight = baseWeight;
+  if (zoomLevel <= 9) {
+    weight = baseWeight * 0.6; // Más delgado en zoom alejado
+  } else if (zoomLevel <= 11) {
+    weight = baseWeight * 0.8; // Intermedio
+  } else if (zoomLevel >= 13) {
+    weight = baseWeight * 1.3; // Más grueso en zoom cercano
   }
   
   // Color oscurecido basado en el color del mapa
@@ -128,11 +139,23 @@ export const getRoadStyle = (feature) => {
   
   return {
     color: color,
-    weight: weight,
+    weight: Math.max(0.5, weight), // Mínimo 0.5px
     opacity: 0.8,
     dashArray: dashArray,
     lineCap: 'round',
     lineJoin: 'round'
+  };
+};
+
+/**
+ * Crea una función de estilo que se actualiza con el zoom
+ * @param {Object} map - Instancia del mapa de Leaflet
+ * @returns {Function} - Función de estilo para GeoJSON
+ */
+export const createResponsiveRoadStyle = (map) => {
+  return (feature) => {
+    const currentZoom = map ? map.getZoom() : 10;
+    return getRoadStyle(feature, currentZoom);
   };
 };
 
@@ -148,18 +171,67 @@ export const getRoadPopupContent = (feature) => {
   // Usar nombre si existe, sino usar código
   const displayName = props.nombre || props.codigo || 'Sin nombre';
   
+  // Función helper para formatear sentido
+  const formatSentido = (sentido) => {
+    if (!sentido) return '';
+    if (sentido.includes('AMBOS SENTIDOS')) return 'Doble vía';
+    if (sentido.includes('DIGITALIZACIÓN')) return 'Vía simple';
+    return sentido;
+  };
+  
+  // Función helper para formatear calzada
+  const formatCalzada = (calzada) => {
+    if (!calzada) return 'No especificada';
+    if (calzada.includes('SE VE CALZADA')) return 'Calzada asfaltada/pavimentada';
+    if (calzada.includes('SE VE HUELLA')) return 'Camino de tierra/huella';
+    if (calzada.includes('SE VE FAJA')) return 'Faja sin calzada';
+    if (calzada.includes('NO HAY FAJA')) return 'Sin infraestructura vial';
+    if (calzada.includes('OCULTAMIENTOS')) return 'No visible en imagen';
+    return calzada;
+  };
+  
   return `
-    <div style="font-family: Arial, sans-serif; min-width: 200px;">
-      <h3 style="margin: 0 0 10px 0; color: #1f2937; font-size: 16px; font-weight: bold;">
-        ${displayName}
-      </h3>
-      <div style="color: #374151; line-height: 1.5;">
-        <p style="margin: 5px 0;"><strong>Código:</strong> ${props.codigo || 'N/A'}</p>
-        <p style="margin: 5px 0;"><strong>Longitud:</strong> ${length} km (aproximado)</p>
-        <p style="margin: 5px 0;"><strong>Jurisdicción:</strong> ${props.jurisdiccion || 'N/A'}</p>
-        <p style="margin: 5px 0;"><strong>Categoría:</strong> ${props.categoria || 'N/A'}</p>
-        <p style="margin: 5px 0;"><strong>Tipo de calzada:</strong> ${props.calzada || 'N/A'}</p>
-        ${props.sentido ? `<p style="margin: 5px 0;"><strong>Sentido:</strong> ${props.sentido}</p>` : ''}
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; min-width: 220px; max-width: 320px;">
+      <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 12px; margin: -12px -16px 12px -16px; border-radius: 8px 8px 0 0;">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 600;">
+          🛣️ ${displayName}
+        </h3>
+        ${props.numero ? `<p style="margin: 2px 0 0 0; font-size: 12px; opacity: 0.9;">Ruta N° ${props.numero}</p>` : ''}
+      </div>
+      
+      <div style="color: #374151; line-height: 1.4; font-size: 14px;">
+        <div style="display: flex; align-items: center; margin: 8px 0; padding: 6px; background: #f8fafc; border-radius: 4px;">
+          <span style="font-weight: 600; color: #059669;">📏 Longitud:</span>
+          <span style="margin-left: 8px; font-weight: 500; color: #047857;">${length} km</span>
+        </div>
+        
+        <div style="margin: 8px 0;">
+          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">🏷️ Código:</span> ${props.codigo || 'N/A'}</p>
+          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">🏛️ Jurisdicción:</span> ${props.jurisdiccion || 'N/A'}</p>
+          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">📋 Categoría:</span> ${props.categoria || 'N/A'}</p>
+        </div>
+        
+        <div style="margin: 8px 0; padding: 6px; background: #fef3c7; border-radius: 4px; border-left: 3px solid #f59e0b;">
+          <p style="margin: 2px 0;"><span style="font-weight: 500; color: #92400e;">🛤️ Tipo de vía:</span></p>
+          <p style="margin: 2px 0 0 0; color: #b45309; font-size: 13px;">${formatCalzada(props.calzada)}</p>
+        </div>
+        
+        ${props.sentido ? `
+        <div style="margin: 8px 0;">
+          <p style="margin: 4px 0;"><span style="font-weight: 500; color: #6b7280;">🚗 Circulación:</span> ${formatSentido(props.sentido)}</p>
+        </div>
+        ` : ''}
+        
+        ${props.observaciones ? `
+        <div style="margin: 8px 0; padding: 6px; background: #eff6ff; border-radius: 4px; border-left: 3px solid #3b82f6;">
+          <p style="margin: 2px 0; font-weight: 500; color: #1e40af;">💬 Observaciones:</p>
+          <p style="margin: 2px 0 0 0; color: #1e40af; font-size: 13px;">${props.observaciones}</p>
+        </div>
+        ` : ''}
+        
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af;">
+          Fuente: ${props.fuente || 'No especificada'}${props.gid ? ` • ID: ${props.gid}` : ''}
+        </div>
       </div>
     </div>
   `;

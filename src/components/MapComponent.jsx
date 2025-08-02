@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
 import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
 import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
-import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
+import { getRoadStyle, onEachRoadFeature, createResponsiveRoadStyle } from '../utils/caminosUtils';
 
 // Configurar iconos de Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -23,6 +23,28 @@ const stateColors = {
 
 const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
 
+// Componente para manejar eventos de zoom
+function ZoomHandler({ onZoomChange }) {
+    const map = useMap();
+    
+    useEffect(() => {
+        const handleZoom = () => {
+            onZoomChange(map.getZoom());
+        };
+        
+        map.on('zoomend', handleZoom);
+        
+        // Establecer zoom inicial
+        onZoomChange(map.getZoom());
+        
+        return () => {
+            map.off('zoomend', handleZoom);
+        };
+    }, [map, onZoomChange]);
+    
+    return null;
+}
+
 function MapComponent({ 
     zoneStates,         // <- RECIBIR COMO PROP
     onZoneStatesLoad,   // <- CALLBACK PARA CARGAR DATOS INICIALES  
@@ -35,8 +57,20 @@ function MapComponent({
     const [zones, setZones] = useState([]);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
+    const [currentZoom, setCurrentZoom] = useState(9);
+    const mapRef = useRef(null);
     
     const mapCenter = [-32.55, -54.00]; // Coordenadas del centro de Cerro Largo
+
+    // Función para actualizar el zoom
+    const handleZoomChange = (newZoom) => {
+        setCurrentZoom(newZoom);
+    };
+
+    // Función de estilo que depende del zoom actual
+    const getRoadStyleWithZoom = (feature) => {
+        return getRoadStyle(feature, currentZoom);
+    };
 
     useEffect(() => {
         const loadData = async () => {
@@ -302,11 +336,12 @@ function MapComponent({
                 {caminosData && caminosData.features.length > 0 && (
                     <GeoJSON
                         data={caminosData}
-                        style={getRoadStyle}
+                        style={getRoadStyleWithZoom}
                         onEachFeature={onEachRoadFeature}
-                        key="caminos-layer"
+                        key={`caminos-layer-zoom-${currentZoom}`}
                     />
                 )}
+                <ZoomHandler onZoomChange={handleZoomChange} />
             </MapContainer>
         </div>
     );
