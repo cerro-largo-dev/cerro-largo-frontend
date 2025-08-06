@@ -226,12 +226,12 @@ function MapComponent({
         layer.on({
             mouseover: (e) => {
                 e.target.setStyle({
-                    fillOpacity: 0.8
+                    fillOpacity: 0.9
                 });
             },
             mouseout: (e) => {
                 e.target.setStyle({
-                    fillOpacity: 0.4
+                    fillOpacity: 0.6
                 });
             },
             click: (e) => {
