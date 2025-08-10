@@ -146,7 +146,8 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       })
 
       // Enviar al backend
-      const response = await fetch('https://cerro-largo-backend.onrender.com/api/reportes', {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://cerro-largo-backend.onrender.com';
+      const response = await fetch(`${backendUrl}/api/reportes`, {
         method: 'POST',
         body: formDataToSend
       })
