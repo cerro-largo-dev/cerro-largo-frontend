@@ -12,17 +12,17 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
   const [locationError, setLocationError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const MAX_FILE_SIZE = 16 * 1024 * 1024  // 16MB
+
   // Obtener geolocalización al abrir el modal
   useEffect(() => {
     if (isOpen) {
-      // Solo obtener ubicación si no la tenemos ya
       if (!formData.latitude || !formData.longitude) {
         setLocationError('');
         getLocation();
       }
     }
-    // NO limpiar la ubicación cuando se cierra el modal para mantener el marcador visible
-  }, [isOpen, onLocationChange])
+  }, [isOpen])
 
   const getLocation = () => {
     setIsLoadingLocation(true)
@@ -38,47 +38,37 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        
-        console.log('Geolocalización obtenida:', { lat, lng });
-        
+
         setFormData(prev => ({
           ...prev,
           latitude: lat,
           longitude: lng
         }))
-        
+
         // Enviar ubicación al padre (se mantiene persistente)
         if (onLocationChange) {
-          console.log('ReportModal enviando ubicación al padre:', { lat, lng });
           onLocationChange({ lat, lng });
         }
-        
+
         setIsLoadingLocation(false)
       },
       (error) => {
-        console.error('Error de geolocalización:', error);
-        
-        // Para debug: usar coordenadas de Cerro Largo como fallback
         const fallbackLat = -32.3667;
         const fallbackLng = -54.1667;
-        
-        console.log('Usando coordenadas de fallback:', { lat: fallbackLat, lng: fallbackLng });
-        
+
         setFormData(prev => ({
           ...prev,
           latitude: fallbackLat,
           longitude: fallbackLng
         }))
-        
-        // Enviar ubicación de fallback al padre (se mantiene persistente)
+
         if (onLocationChange) {
-          console.log('ReportModal enviando ubicación de fallback al padre:', { lat: fallbackLat, lng: fallbackLng });
           onLocationChange({ lat: fallbackLat, lng: fallbackLng });
         }
-        
+
         let errorMessage = 'Usando ubicación aproximada de Cerro Largo (GPS no disponible)';
         setLocationError(errorMessage);
-        
+
         setIsLoadingLocation(false)
       },
       {
@@ -99,9 +89,19 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
 
   const handlePhotoUpload = (e) => {
     const files = Array.from(e.target.files)
+    
+    // Limitar el número de fotos
     if (files.length + formData.photos.length > 3) {
       alert('Máximo 3 fotos permitidas')
       return
+    }
+
+    // Validar tamaño de las fotos
+    for (let file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert('El archivo es demasiado grande (máximo 16MB)')
+        return
+      }
     }
 
     setFormData(prev => ({
@@ -119,7 +119,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!formData.description.trim()) {
       alert('Por favor, ingresa una descripción')
       return
@@ -132,21 +132,21 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       const formDataToSend = new FormData()
       formDataToSend.append('descripcion', formData.description)
       formDataToSend.append('nombre_lugar', formData.placeName || '')
-      
+
       if (formData.latitude !== null) {
         formDataToSend.append('latitud', formData.latitude.toString())
       }
       if (formData.longitude !== null) {
         formDataToSend.append('longitud', formData.longitude.toString())
       }
-      
+
       // Agregar fotos
-      formData.photos.forEach((photo, index) => {
+      formData.photos.forEach((photo) => {
         formDataToSend.append('fotos', photo)
       })
 
       // Enviar al backend
-      const backendUrl = import.meta.env.VITE_REACT_APP_BACKEND_URL || 'https://cerro-largo-backend.onrender.com';
+      const backendUrl = import.meta.env.VITE_REACT_APP_BACKEND_URL || 'https://cerro-largo-backend.onrender.com'
       const response = await fetch(`${backendUrl}/api/reportes`, {
         method: 'POST',
         body: formDataToSend
@@ -179,15 +179,13 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       photos: []
     })
     setLocationError('')
-    
-    // Limpiar ubicación en el padre al cerrar el modal
+
     if (onLocationChange) {
-      onLocationChange(null);
+      onLocationChange(null)
     }
-    
-    // Cerrar el modal
+
     if (onClose) {
-      onClose();
+      onClose()
     }
   }
 
@@ -207,7 +205,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
             </svg>
           </button>
         </div>
-        
+
         <div className="space-y-4 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Geolocalización */}
@@ -365,6 +363,4 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
   )
 }
 
-
 export default ReportModal
-
