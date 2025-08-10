@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMap, CircleMarker, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
 import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
@@ -12,6 +12,20 @@ L.Icon.Default.mergeOptions({
     iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
     iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Crear icono personalizado para GPS
+const gpsIcon = new L.Icon({
+    iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="24" height="24">
+            <circle cx="12" cy="12" r="8" fill="#3b82f6" stroke="#ffffff" stroke-width="2"/>
+            <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+        </svg>
+    `),
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12],
+    className: 'gps-marker-icon'
 });
 
 // Colores para estados de camineria (Unicos colores que se mostraran)
@@ -45,11 +59,12 @@ function ZoomHandler({ onZoomChange }) {
     return null;
 }
 
-function MapComponent({ 
-    zoneStates,         // <- RECIBIR COMO PROP
-    onZoneStatesLoad,   // <- CALLBACK PARA CARGAR DATOS INICIALES  
-    onZoneStateChange,  // <- CALLBACK PARA CAMBIOS DE ESTADO
-    onZonesLoad         // <- CALLBACK PARA CARGAR LISTA DE ZONAS
+function MapComponent({
+    zoneStates,
+    onZoneStatesLoad,
+    onZoneStateChange,
+    onZonesLoad,
+    userLocation // Nueva prop para la ubicación del usuario
 }) {
     const [geoData, setGeoData] = useState(null);
     const [meloAreaGeoData, setMeloAreaGeoData] = useState(null);
@@ -186,7 +201,7 @@ function MapComponent({
             fillColor: finalColor,
             weight: 2,
             opacity: 0.9, // Borde con alta opacidad
-            color: finalColor, // Mismo color que el relleno
+            color: '#1D2E28', // Mismo color que el relleno
             dashArray: '',
             fillOpacity: 0.6 // Relleno con menor opacidad
         };
@@ -261,7 +276,7 @@ function MapComponent({
                 // setMessage({ type: 'success', text: 'Reporte descargado correctamente' }); // Removido para evitar notificaciones innecesarias
             } else {
                 console.error('Failed downloading report');
-                setMessage({ type: 'error', text: 'Error al descargar reporte' });
+                setMessage({ type: 'error', text: 'Error al cargar reporte' });
             }
         } catch (error) {
             console.error('Error downloading report:', error);
@@ -345,6 +360,23 @@ function MapComponent({
                         }}
                     />
                 )}
+                {userLocation && (
+                    <>
+                        {console.log('Renderizando marcador GPS en:', userLocation)}
+                        <Marker
+                            position={[userLocation.lat, userLocation.lng]}
+                            icon={gpsIcon}
+                        >
+                            <Popup>
+                                <div className="text-center">
+                                    <strong>Tu ubicación actual</strong><br/>
+                                    <small>Lat: {userLocation.lat.toFixed(6)}<br/>
+                                    Lng: {userLocation.lng.toFixed(6)}</small>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    </>
+                )}
                 <ZoomHandler onZoomChange={handleZoomChange} />
             </MapContainer>
         </div>
@@ -352,3 +384,5 @@ function MapComponent({
 }
 
 export default MapComponent;
+
+

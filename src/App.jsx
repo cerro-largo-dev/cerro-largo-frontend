@@ -1,26 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
 import './App.css';
+import ReportButton from './components/Reportes/ReportButton';
 
 function App() {
-  // ESTADO COMPARTIDO: Elevar zoneStates al nivel del componente padre
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
+  const [userLocation, setUserLocation] = useState(null); // Estado para la ubicación del usuario
 
-  // Callback para cuando MapComponent carga los datos iniciales
+  // Obtener geolocalización al iniciar la aplicación
+  useEffect(() => {
+    const getInitialLocation = () => {
+      if (!navigator.geolocation) {
+        console.log('Geolocalización no soportada, usando ubicación de fallback');
+        const fallbackLocation = { lat: -32.3667, lng: -54.1667 };
+        setUserLocation(fallbackLocation);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          console.log('Ubicación inicial obtenida:', location);
+          setUserLocation(location);
+        },
+        (error) => {
+          console.error('Error al obtener ubicación inicial:', error);
+          // Usar coordenadas de Cerro Largo como fallback
+          const fallbackLocation = { lat: -32.3667, lng: -54.1667 };
+          console.log('Usando ubicación de fallback:', fallbackLocation);
+          setUserLocation(fallbackLocation);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutos
+        }
+      );
+    };
+
+    getInitialLocation();
+  }, []);
+
   const handleZoneStatesLoad = (initialStates) => {
     console.log('Cargando estados iniciales:', initialStates);
     setZoneStates(initialStates);
   };
 
-  // Callback para cuando se cargan las zonas disponibles
   const handleZonesLoad = (zonesList) => {
     console.log('Cargando lista de zonas:', zonesList);
     setZones(zonesList);
   };
 
-  // Callback para cuando AdminPanel o MapComponent realizan cambios individuales
   const handleZoneStateChange = (zoneName, newState) => {
     console.log(`Actualizando zona ${zoneName} a estado ${newState}`);
     setZoneStates(prevStates => ({
@@ -29,7 +64,6 @@ function App() {
     }));
   };
 
-  // Callback para actualizar múltiples zonas (bulk updates desde AdminPanel)
   const handleBulkZoneStatesUpdate = (updatedStates) => {
     console.log('Actualizando múltiples zonas:', updatedStates);
     setZoneStates(prevStates => ({
@@ -38,14 +72,12 @@ function App() {
     }));
   };
 
-  // Callback para refrescar completamente los datos desde el servidor
   const handleRefreshZoneStates = async () => {
     try {
       const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/zones/states');
       if (response.ok) {
         const data = await response.json();
         const stateMap = {};
-        // Manejar el formato de respuesta del backend (diccionario de estados)
         if (data.states) {
           for (const zoneName in data.states) {
             stateMap[zoneName] = data.states[zoneName].state;
@@ -60,19 +92,29 @@ function App() {
     }
   };
 
+  // Callback para actualizar la ubicación del usuario desde el modal de reporte
+  const handleUserLocationChange = (location) => {
+    if (location) {
+      console.log('App actualizando ubicación desde modal:', location);
+      setUserLocation(location);
+    }
+  };
+
   return (
     <div className="app-container">
-      {/* Componente del Mapa */}
       <MapComponent 
         zoneStates={zoneStates}
         onZoneStatesLoad={handleZoneStatesLoad}
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
+        userLocation={userLocation} // Pasar la ubicación del usuario al MapComponent
       />
       
-      {/* Panel de Administración (Eliminado) */}
+      <ReportButton onLocationChange={handleUserLocationChange} /> {/* Pasar el callback al ReportButton */}
     </div>
   );
 }
 
 export default App;
+
+

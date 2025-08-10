@@ -473,3 +473,32 @@
   }
 }
 
+
+
+/* Estilo para el marcador de ubicación titilante */
+.pulse-marker {
+  animation: pulse 1.5s infinite ease-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+}
+
+/* Estilo para el icono GPS personalizado */
+.gps-marker-icon {
+  animation: pulse 2s infinite ease-in-out;
+  z-index: 1000 !important;
+}
+
+
