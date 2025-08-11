@@ -145,12 +145,12 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
         formDataToSend.append('fotos', photo)
       })
 
-      // Enviar al backend
-      const backendUrl = import.meta.env.VITE_REACT_APP_BACKEND_URL || 'https://cerro-largo-backend.onrender.com';
-      const response = await fetch('${backendUrl}/api/reportes', {
-        method: 'POST',
-        body: formDataToSend
-      })
+// Enviar al backend
+const backendUrl = import.meta.env.VITE_REACT_APP_BACKEND_URL || 'https://cerro-largo-backend.onrender.com';
+const response = await fetch(`${backendUrl}/api/reportes`, {
+  method: 'POST',
+  body: formDataToSend
+});
 
       if (response.ok) {
         const result = await response.json()
