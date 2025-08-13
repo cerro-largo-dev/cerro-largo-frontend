@@ -1,4 +1,4 @@
-const BACKEND_URL = 'https://5000-iywu37z3h19bqizz7adyt-c514be56.manusvm.computer';
+const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
 
 // Función helper para hacer requests autenticados
 const authenticatedFetch = async (url, options = {}) => {
