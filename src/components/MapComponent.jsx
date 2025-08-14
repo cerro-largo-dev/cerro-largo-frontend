@@ -35,7 +35,7 @@ const stateColors = {
     red: '#ef4444', // Rojo - Suspendido
 };
 
-const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
+const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
 
 // Componente para manejar eventos de zoom
 function ZoomHandler({ onZoomChange }) {
