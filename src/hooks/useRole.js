@@ -1,45 +1,33 @@
-import { useAuth } from './useAuth';
+import { useAuth } from './useAuth.jsx';
 
 export const useRole = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
 
-  const isAdmin = () => {
-    return isAuthenticated && user?.role === 'ADMIN';
-  };
+  const role = user?.role;
+  const municipio = user?.municipio_id ?? null;
 
-  const isAlcalde = () => {
-    return isAuthenticated && user?.role === 'ALCALDE';
-  };
+  const isAdmin = () => !loading && isAuthenticated && role === 'ADMIN';
+  const isAlcalde = () => !loading && isAuthenticated && role === 'ALCALDE';
 
-  const getMunicipioFromToken = () => {
-    return user?.municipio_id || null;
-  };
+  const hasRole = (r) => !loading && isAuthenticated && role === r;
+  const hasAnyRole = (roles = []) => !loading && isAuthenticated && roles.includes(role);
 
   const canAccessMunicipio = (municipioId) => {
+    if (loading || !isAuthenticated) return false;
     if (isAdmin()) return true;
-    if (isAlcalde()) return user?.municipio_id === municipioId;
-    return false;
+    return isAlcalde() && municipio === municipioId;
   };
 
-  const canEditMunicipio = (municipioId) => {
-    return canAccessMunicipio(municipioId);
-  };
+  const canEditMunicipio = canAccessMunicipio;
 
-  const getAccessibleMunicipios = (allMunicipios) => {
+  const getMunicipioFromToken = () => municipio;
+
+  const getAccessibleMunicipios = (allMunicipios = []) => {
+    if (loading || !isAuthenticated) return [];
     if (isAdmin()) return allMunicipios;
-    if (isAlcalde() && user?.municipio_id) {
-      return allMunicipios.filter(municipio => municipio === user.municipio_id);
-    }
+    if (isAlcalde() && municipio) return allMunicipios.filter((m) => m === municipio);
     return [];
-  };
-
-  const hasRole = (role) => {
-    return isAuthenticated && user?.role === role;
-  };
-
-  const hasAnyRole = (roles) => {
-    return isAuthenticated && roles.includes(user?.role);
-  };
+    };
 
   return {
     isAdmin,
@@ -50,8 +38,7 @@ export const useRole = () => {
     getAccessibleMunicipios,
     hasRole,
     hasAnyRole,
-    currentRole: user?.role,
-    currentMunicipio: user?.municipio_id,
+    currentRole: role,
+    currentMunicipio: municipio,
   };
 };
-
