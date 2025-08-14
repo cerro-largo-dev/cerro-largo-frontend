@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
+const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
 
 function AdminPanel({ 
     zoneStates,           // <- RECIBIR ESTADO COMPARTIDO
