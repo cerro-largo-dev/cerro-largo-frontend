@@ -1,9 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 
-// Contexto
 const AuthContext = createContext(null);
 
-// Hook
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
@@ -15,13 +13,12 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Base64 seguro (soporta entornos sin atob)
+  // ---- helpers JWT ----
   const b64decode = (str) => {
     try { if (typeof atob === 'function') return atob(str); } catch {}
     try { return Buffer.from(str, 'base64').toString('binary'); } catch { return ''; }
   };
 
-  // Decodificar JWT
   const decodeToken = useCallback((t) => {
     try {
       const base64Url = t.split('.')[1];
@@ -33,19 +30,17 @@ export const AuthProvider = ({ children }) => {
           .join('')
       );
       return JSON.parse(jsonPayload);
-    } catch (err) {
-      console.error('Error decoding token:', err);
+    } catch {
       return null;
     }
   }, []);
 
   const isTokenExpired = useCallback((t) => {
-    const decoded = decodeToken(t);
-    if (!decoded || !decoded.exp) return true;
-    return Date.now() >= decoded.exp * 1000;
+    const d = decodeToken(t);
+    if (!d || !d.exp) return true;
+    return Date.now() >= d.exp * 1000;
   }, [decodeToken]);
 
-  // Rehidratar desde localStorage
   const hydrateFromStorage = useCallback(() => {
     const stored = localStorage.getItem('authToken');
     if (stored && !isTokenExpired(stored)) {
@@ -58,6 +53,8 @@ export const AuthProvider = ({ children }) => {
     } else {
       localStorage.removeItem('authToken');
     }
+    setToken(null);
+    setUser(null);
     return false;
   }, [decodeToken, isTokenExpired]);
 
@@ -66,81 +63,79 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, [hydrateFromStorage]);
 
-  // Sincronizar entre pestañas
   useEffect(() => {
     const onStorage = (e) => { if (e.key === 'authToken') hydrateFromStorage(); };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [hydrateFromStorage]);
 
-  // Login
+  // ---- API base ----
+  const API = 'https://cerro-largo-backend.onrender.com';
+
+  // ---- auth actions ----
   const login = async (email, password) => {
     try {
-      const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/login', {
+      const r = await fetch(`${API}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const newToken = data?.token;
-        const d = newToken ? decodeToken(newToken) : null;
-        if (d) {
-          const userData = { id: d.sub, email: d.email, role: d.role, municipio_id: d.municipio_id };
-          localStorage.setItem('authToken', newToken);
-          setToken(newToken);
-          setUser(userData);
-          return { success: true, user: userData };
-        }
-        return { success: false, message: 'Token inválido' };
-      } else {
+      if (!r.ok) {
         let msg = 'Error de autenticación';
-        try { const ed = await response.json(); msg = ed?.message || msg; } catch {}
+        try { const ed = await r.json(); msg = ed?.message || msg; } catch {}
         return { success: false, message: msg };
       }
-    } catch (error) {
-      console.error('Login error:', error);
+      const data = await r.json();
+      const newToken = data?.token;
+      const d = newToken ? decodeToken(newToken) : null;
+      if (!d) return { success: false, message: 'Token inválido' };
+
+      localStorage.setItem('authToken', newToken);
+      setToken(newToken);
+      setUser({ id: d.sub, email: d.email, role: d.role, municipio_id: d.municipio_id });
+      return { success: true, user: { id: d.sub, email: d.email, role: d.role, municipio_id: d.municipio_id } };
+    } catch {
       return { success: false, message: 'Error de conexión' };
     }
   };
 
-  // Logout
   const logout = () => {
     setToken(null);
     setUser(null);
     localStorage.removeItem('authToken');
   };
 
-  // Verificar con servidor
-  const checkAuth = async () => {
+  // ✅ checkAuth local (no golpea al backend → evita 401 si algún componente lo llama sin token)
+  const checkAuth = () => {
     const t = token || localStorage.getItem('authToken');
-    if (!t) return false;
+    if (!t || isTokenExpired(t)) return false;
+    const d = decodeToken(t);
+    return !!(d && d.sub);
+  };
+
+  // 🔒 serverCheckAuth (solo si querés validar en servidor)
+  const serverCheckAuth = async () => {
+    const t = token || localStorage.getItem('authToken');
+    if (!t || isTokenExpired(t)) return false;
     try {
-      const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/check-auth', {
+      const res = await fetch(`${API}/api/admin/check-auth`, {
+        method: 'GET',
         headers: { 'Authorization': `Bearer ${t}` },
       });
-      if (response.ok) {
-        const data = await response.json();
-        return !!data?.authenticated;
-      } else {
-        logout();
-        return false;
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
+      if (!res.ok) return false;
+      const data = await res.json();
+      return !!data?.authenticated;
+    } catch {
       return false;
     }
   };
 
-  // Obtener token actual
-  const getToken = () => token || localStorage.getItem('authToken');
-
-  // Fetch autenticado (✅ ahora hace fallback a localStorage)
+  // ---- fetch autenticado ----
   const authenticatedFetch = async (url, options = {}) => {
     const t = token || localStorage.getItem('authToken');
-    if (!t) {
-      console.warn('authenticatedFetch sin token:', url);
+    if (!t || isTokenExpired(t)) {
+      console.warn('authenticatedFetch: sin token válido → logout');
+      logout();
       throw new Error('No authentication token available');
     }
     const headers = { ...(options.headers || {}) };
@@ -149,10 +144,6 @@ export const AuthProvider = ({ children }) => {
     }
     if (options.body !== undefined && !headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/json';
-    }
-    // Debug útil
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('authFetch →', url, { hasToken: !!t });
     }
     const res = await fetch(url, { ...options, headers });
     if (res.status === 401) {
@@ -168,9 +159,10 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
-    checkAuth,
-    getToken,
+    checkAuth,         // local
+    serverCheckAuth,   // remoto (opcional)
     authenticatedFetch,
+    getToken: () => token || localStorage.getItem('authToken'),
     isAuthenticated: !!user,
     isAdmin: user?.role === 'ADMIN',
     isAlcalde: user?.role === 'ALCALDE',
@@ -179,4 +171,3 @@ export const AuthProvider = ({ children }) => {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-
