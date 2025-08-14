@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
+import AdminPanel from './components/AdminPanel';
 import AdminIndex from './pages/admin';
 import './App.css';
 import ReportButton from './components/Reportes/ReportButton';
