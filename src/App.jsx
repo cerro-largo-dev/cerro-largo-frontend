@@ -111,6 +111,7 @@ function App() {
       />
       
       <ReportButton onLocationChange={handleUserLocationChange} /> {/* Pasar el callback al ReportButton */}
+      <AdminPanel onRefreshZoneStates={handleRefreshZoneStates} onBulkZoneStatesUpdate={handleBulkZoneStatesUpdate} />
     </div>
   );
 }
