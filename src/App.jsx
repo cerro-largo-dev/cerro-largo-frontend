@@ -1,126 +1,150 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import MapComponent from './components/MapComponent';
-import AdminPanel from './components/AdminPanel';
-import AdminIndex from './pages/admin'; // Importar el index del panel de administración
-import './App.css';
-import ReportButton from './components/Reportes/ReportButton';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/hooks/useAuth.jsx';
 
-function App() {
-  const [zoneStates, setZoneStates] = useState({});
-  const [zones, setZones] = useState([]);
-  const [userLocation, setUserLocation] = useState(null); // Estado para la ubicación del usuario
+const LoginForm = () => {
+  const { login } = useAuth();
+  const [email, setEmail] = useState('admin@cerrolargo.gub.uy');
+  const [password, setPassword] = useState('admin2025');
+  const [error, setError] = useState('');
 
-  // Obtener geolocalización al iniciar la aplicación
-  useEffect(() => {
-    const getInitialLocation = () => {
-      if (!navigator.geolocation) {
-        console.log('Geolocalización no soportada, usando ubicación de fallback');
-        const fallbackLocation = { lat: -32.3667, lng: -54.1667 };
-        setUserLocation(fallbackLocation);
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          console.log('Ubicación inicial obtenida:', location);
-          setUserLocation(location);
-        },
-        (error) => {
-          console.error('Error al obtener ubicación inicial:', error);
-          // Usar coordenadas de Cerro Largo como fallback
-          const fallbackLocation = { lat: -32.3667, lng: -54.1667 };
-          console.log('Usando ubicación de fallback:', fallbackLocation);
-          setUserLocation(fallbackLocation);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000 // 5 minutos
-        }
-      );
-    };
-
-    getInitialLocation();
-  }, []);
-
-  const handleZoneStatesLoad = (initialStates) => {
-    console.log('Cargando estados iniciales:', initialStates);
-    setZoneStates(initialStates);
-  };
-
-  const handleZonesLoad = (zonesList) => {
-    console.log('Cargando lista de zonas:', zonesList);
-    setZones(zonesList);
-  };
-
-  const handleZoneStateChange = (zoneName, newState) => {
-    console.log(`Actualizando zona ${zoneName} a estado ${newState}`);
-    setZoneStates(prevStates => ({
-      ...prevStates,
-      [zoneName]: newState
-    }));
-  };
-
-  const handleBulkZoneStatesUpdate = (updatedStates) => {
-    console.log('Actualizando múltiples zonas:', updatedStates);
-    setZoneStates(prevStates => ({
-      ...prevStates,
-      ...updatedStates
-    }));
-  };
-
-  const handleRefreshZoneStates = async () => {
-    try {
-      const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/zones/states');
-      if (response.ok) {
-        const data = await response.json();
-        const stateMap = {};
-        if (data.states) {
-          for (const zoneName in data.states) {
-            stateMap[zoneName] = data.states[zoneName].state;
-          }
-        }
-        
-        setZoneStates(stateMap);
-        console.log('Estados de zonas refrescados desde el servidor:', stateMap);
-      }
-    } catch (error) {
-      console.error('Error al refrescar estados de zonas:', error);
-    }
-  };
-
-  // Callback para actualizar la ubicación del usuario desde el modal de reporte
-  const handleUserLocationChange = (location) => {
-    if (location) {
-      console.log('App actualizando ubicación desde modal:', location);
-      setUserLocation(location);
-    }
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    const res = await login(email, password);
+    if (!res?.success) setError(res?.message || 'Error de autenticación');
   };
 
   return (
-    <div className="app-container">
-      <Routes>
-        <Route path="/admin/*" element={<AdminIndex />} />
-        <Route path="/*" element={
-          <>
-            <MapComponent 
-              zoneStates={zoneStates}
-              onZoneStatesLoad={handleZoneStatesLoad}
-              onZoneStateChange={handleZoneStateChange}
-              onZonesLoad={handleZonesLoad}
-              userLocation={userLocation} // Pasar la ubicación del usuario al MapComponent
-            />
-            <ReportButton onLocationChange={handleUserLocationChange} /> {/* Pasar el callback al ReportButton */}
-          </>
-        } />
-      </Routes>
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 border rounded-xl p-6">
+        <h1 className="text-xl font-semibold">Iniciar sesión</h1>
+        <label className="block">
+          <span className="text-sm">Email</span>
+          <input
+            className="w-full border rounded px-3 py-2"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm">Contraseña</span>
+          <input
+            className="w-full border rounded px-3 py-2"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        <button className="w-full rounded-lg px-4 py-2 border hover:bg-gray-50" type="submit">
+          Entrar
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default function App() {
+  const {
+    user,
+    loading,
+    isAuthenticated,
+    logout,
+    authenticatedFetch,
+    isAdmin,
+    isAlcalde,
+  } = useAuth();
+
+  const [zoneStates, setZoneStates] = useState({});
+  const [loadingZones, setLoadingZones] = useState(false);
+  const [errorZones, setErrorZones] = useState('');
+
+  const loadZoneStates = async () => {
+    setLoadingZones(true);
+    setErrorZones('');
+    try {
+      const res = await authenticatedFetch(
+        'https://cerro-largo-backend.onrender.com/api/admin/zones/states'
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const next = {};
+      if (data?.states) {
+        for (const name in data.states) next[name] = data.states[name]?.state || 'green';
+      }
+      setZoneStates(next);
+    } catch (e) {
+      console.error('zones/states error:', e);
+      setErrorZones('No se pudieron cargar las zonas.');
+    } finally {
+      setLoadingZones(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) loadZoneStates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  if (loading) return <div className="p-6">Cargando…</div>;
+  if (!isAuthenticated) return <LoginForm />;
+
+  return (
+    <div className="min-h-screen p-6 space-y-6">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Panel de Caminería</h1>
+          <p className="text-sm text-gray-600">
+            Sesión: <strong>{user?.email}</strong> · Rol:{' '}
+            <strong>{isAdmin ? 'ADMIN' : isAlcalde ? 'ALCALDE' : user?.role}</strong>
+            {user?.municipio_id ? ` · Municipio: ${user.municipio_id}` : ''}
+          </p>
+        </div>
+        <button onClick={logout} className="rounded-lg px-4 py-2 border hover:bg-gray-50">
+          Salir
+        </button>
+      </header>
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadZoneStates}
+            className="rounded-lg px-4 py-2 border hover:bg-gray-50"
+            disabled={loadingZones}
+          >
+            {loadingZones ? 'Actualizando…' : 'Actualizar estados'}
+          </button>
+          {errorZones && <span className="text-red-600 text-sm">{errorZones}</span>}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Object.keys(zoneStates).length === 0 && !loadingZones && (
+            <div className="text-sm text-gray-600">Sin datos.</div>
+          )}
+          {Object.entries(zoneStates).map(([zone, state]) => (
+            <div key={zone} className="border rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <p className="font-medium">{zone}</p>
+                <p className="text-sm text-gray-600">Estado actual</p>
+              </div>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  state === 'green'
+                    ? 'bg-green-100 text-green-700'
+                    : state === 'yellow'
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-red-100 text-red-700'
+                }`}
+              >
+                {state}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
-
-export default App;
