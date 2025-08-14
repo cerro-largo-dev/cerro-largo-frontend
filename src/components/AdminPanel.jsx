@@ -1,54 +1,48 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 /**
- * AdminPanel (auth estricto: SIEMPRE pide contraseña salvo sesión válida confirmada)
- * Backend esperado:
- *  - POST /api/admin/login           body: { password }    (setea cookie)
- *  - GET  /api/admin/check-auth      -> { authenticated: true }  (si existe)
- *  - GET  /api/admin/zones/states    -> { success, states:{ [zone_name]: { state, ... } } } (requiere cookie)
- *  - POST /api/admin/zones/update-state  body: { zone_name, state }  ('green'|'yellow'|'red')
- *  - GET  /api/report/generate-pdf   (opcional)
+ * AdminPanel (requiere contraseña salvo sesión válida).
+ * Endpoints:
+ *  - POST /api/admin/login              body: { password }   (cookie)
+ *  - GET  /api/admin/check-auth         -> { authenticated:true } (si existe)
+ *  - GET  /api/admin/zones/states       -> { success, states:{ [zone]: {state,...} } }
+ *  - POST /api/admin/zones/update-state body: { zone_name, state } // 'green'|'yellow'|'red'
  */
-export default function AdminPanel({ onZoneStateChange }) {
-  // --- UI ---
+export default function AdminPanel({ onRefreshZoneStates, onBulkZoneStatesUpdate }) {
   const [isVisible, setIsVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // --- Auth ---
   const [isAuthed, setIsAuthed] = useState(false);
   const [password, setPassword] = useState('');
 
-  // --- Data ---
-  const [zones, setZones] = useState([]);           // ['Arevalo', ...]
-  const [zoneStates, setZoneStates] = useState({});  // { 'Arevalo': 'green'|'yellow'|'red' }
+  const [zones, setZones] = useState([]);            // ['Arévalo', ...]
+  const [zoneStates, setZoneStates] = useState({});  // { 'Arévalo': 'green'|'yellow'|'red' }
 
-  // --- Selección ---
   const [selectedZone, setSelectedZone] = useState('');
   const [selectedState, setSelectedState] = useState('verde');
 
-  // --- ENV ---
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
     (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
     (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL)) ||
-    'https://cerro-largo-backend.onrender.com'; // fallback seguro
+    'https://cerro-largo-backend.onrender.com';
 
   const API = (p) => `${String(BACKEND_URL).replace(/\/$/, '')}${p}`;
 
-  // --- Helpers ---
   const normalizeEs = (s) => {
     if (!s) return 'sin-estado';
     const v = String(s).toLowerCase();
-    const map = { green: 'verde', yellow: 'amarillo', red: 'rojo', verde: 'verde', amarillo: 'amarillo', rojo: 'rojo' };
+    const map = { green:'verde', yellow:'amarillo', red:'rojo', verde:'verde', amarillo:'amarillo', rojo:'rojo' };
     return map[v] || 'sin-estado';
   };
   const normalizeEn = (s) => {
     if (!s) return 'red';
     const v = String(s).toLowerCase();
-    const map = { verde: 'green', amarillo: 'yellow', rojo: 'red', green: 'green', yellow: 'yellow', red: 'red' };
+    const map = { verde:'green', amarillo:'yellow', rojo:'red', green:'green', yellow:'yellow', red:'red' };
     return map[v] || 'red';
   };
+
   const stateLabelEs = (s) => {
     const v = normalizeEs(s);
     if (v === 'verde') return '🟩 Habilitado';
@@ -63,30 +57,26 @@ export default function AdminPanel({ onZoneStateChange }) {
     if (v === 'rojo') return '#ef4444';
     return '#6b7280';
   };
+
   const fetchJsonStrict = async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
     const body = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} @ ${url} :: ${body.slice(0, 200)}`);
-    if (!ct.includes('application/json')) throw new Error(`No-JSON @ ${url} :: ${body.slice(0, 200)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} @ ${url} :: ${body.slice(0,200)}`);
+    if (!ct.includes('application/json')) throw new Error(`No-JSON @ ${url} :: ${body.slice(0,200)}`);
     try { return JSON.parse(body); } catch (e) { throw new Error(`JSON inválido @ ${url} :: ${e.message}`); }
   };
 
-  // --- Auth inicial: si el backend confirma cookie, recién ahí consideramos autenticado ---
+  // Solo consideramos autenticado si check-auth lo confirma; luego cargamos estados
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        // Si existe el endpoint de check-auth, úsalo
         const d = await fetchJsonStrict(API('/api/admin/check-auth')).catch(() => null);
         const ok = !!(d && (d.authenticated === true || d.success === true));
         if (mounted) setIsAuthed(ok);
-        if (ok) {
-          await refreshStates(); // solo cargamos zonas si HAY sesión válida
-        }
-      } catch {
-        // ignoramos (seguirá pidiendo contraseña)
-      }
+        if (ok) await refreshStates();
+      } catch { /* ignore */ }
     })();
     return () => { mounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,11 +86,10 @@ export default function AdminPanel({ onZoneStateChange }) {
     const names = [];
     const map = {};
     for (const [zoneName, info] of Object.entries(statesObj || {})) {
-      const st = normalizeEn(info?.state);
-      map[zoneName] = st;
+      map[zoneName] = normalizeEn(info?.state);
       names.push(zoneName);
     }
-    names.sort((a, b) => a.localeCompare(b));
+    names.sort((a,b)=>a.localeCompare(b));
     setZones(names);
     setZoneStates(map);
   };
@@ -128,13 +117,16 @@ export default function AdminPanel({ onZoneStateChange }) {
       const r = await fetchJsonStrict(API('/api/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ password })
       });
       if (r?.success === false) throw new Error(r?.message || 'Login falló');
       setIsAuthed(true);
       setPassword('');
-      await refreshStates(); // cargar inmediatamente tras login
+      await refreshStates();
       setMsg('Autenticado.');
+      // avisa al padre para refrescar mapa si lo desea
+      if (typeof onRefreshZoneStates === 'function') onRefreshZoneStates();
     } catch (e) {
       setMsg(e.message);
       alert(e.message);
@@ -152,42 +144,14 @@ export default function AdminPanel({ onZoneStateChange }) {
       const res = await fetchJsonStrict(API('/api/admin/zones/update-state'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body)
       });
       if (res?.success === false) throw new Error(res?.message || 'Actualización fallida');
       setZoneStates((prev) => ({ ...prev, [selectedZone]: normalizeEn(selectedState) }));
-      if (typeof onZoneStateChange === 'function') onZoneStateChange(selectedZone, normalizeEn(selectedState));
+      if (typeof onRefreshZoneStates === 'function') onRefreshZoneStates();
+      if (typeof onBulkZoneStatesUpdate === 'function') onBulkZoneStatesUpdate({ [selectedZone]: normalizeEn(selectedState) });
       setMsg('Estado actualizado.');
-    } catch (e) {
-      setMsg(e.message);
-      alert(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDownloadReport = async () => {
-    if (!isAuthed) { alert('Inicia sesión.'); return; }
-    setLoading(true); setMsg('');
-    try {
-      const url = API('/api/report/generate-pdf');
-      const res = await fetch(url, { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/pdf')) {
-        const text = await res.text();
-        throw new Error(`No-PDF: ${text.slice(0, 200)}`);
-      }
-      const blob = await res.blob();
-      const objURL = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objURL;
-      a.download = `reporte_camineria_${new Date().toISOString().slice(0,10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objURL);
-      setMsg('Reporte descargado.');
     } catch (e) {
       setMsg(e.message);
       alert(e.message);
@@ -232,7 +196,6 @@ export default function AdminPanel({ onZoneStateChange }) {
             <h4>Panel de Control</h4>
             <div className="admin-actions">
               <button onClick={refreshStates} disabled={loading}>{loading ? '...' : '↻ Recargar'}</button>
-              <button onClick={handleDownloadReport} disabled={loading}>📄 Reporte</button>
             </div>
           </div>
 
