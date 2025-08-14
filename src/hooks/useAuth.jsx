@@ -1,4 +1,6 @@
+// src/hooks/useAuth.jsx
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { authAPI, authenticatedFetch } from '@/lib/api.js';
 
 const AuthContext = createContext(null);
 
@@ -9,7 +11,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser]   = useState(null);
+  const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,16 +25,11 @@ export const AuthProvider = ({ children }) => {
     try {
       const base64Url = t.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        b64decode(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
+      const json = decodeURIComponent(
+        b64decode(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
       );
-      return JSON.parse(jsonPayload);
-    } catch {
-      return null;
-    }
+      return JSON.parse(json);
+    } catch { return null; }
   }, []);
 
   const isTokenExpired = useCallback((t) => {
@@ -69,17 +66,10 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, [hydrateFromStorage]);
 
-  // ---- API base ----
-  const API = 'https://cerro-largo-backend.onrender.com';
-
-  // ---- auth actions ----
+  // ---- acciones ----
   const login = async (email, password) => {
     try {
-      const r = await fetch(`${API}/api/admin/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      const r = await authAPI.login(email, password);
       if (!r.ok) {
         let msg = 'Error de autenticación';
         try { const ed = await r.json(); msg = ed?.message || msg; } catch {}
@@ -105,7 +95,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('authToken');
   };
 
-  // ✅ checkAuth local (no golpea al backend → evita 401 si algún componente lo llama sin token)
+  // ✅ checkAuth local (sin red)
   const checkAuth = () => {
     const t = token || localStorage.getItem('authToken');
     if (!t || isTokenExpired(t)) return false;
@@ -113,44 +103,16 @@ export const AuthProvider = ({ children }) => {
     return !!(d && d.sub);
   };
 
-  // 🔒 serverCheckAuth (solo si querés validar en servidor)
+  // 🔒 checkAuth con servidor (si lo necesitás en algún lugar)
   const serverCheckAuth = async () => {
     const t = token || localStorage.getItem('authToken');
     if (!t || isTokenExpired(t)) return false;
     try {
-      const res = await fetch(`${API}/api/admin/check-auth`, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${t}` },
-      });
+      const res = await authAPI.checkAuth();
       if (!res.ok) return false;
       const data = await res.json();
       return !!data?.authenticated;
-    } catch {
-      return false;
-    }
-  };
-
-  // ---- fetch autenticado ----
-  const authenticatedFetch = async (url, options = {}) => {
-    const t = token || localStorage.getItem('authToken');
-    if (!t || isTokenExpired(t)) {
-      console.warn('authenticatedFetch: sin token válido → logout');
-      logout();
-      throw new Error('No authentication token available');
-    }
-    const headers = { ...(options.headers || {}) };
-    if (!headers['Authorization'] && !headers['authorization']) {
-      headers['Authorization'] = `Bearer ${t}`;
-    }
-    if (options.body !== undefined && !headers['Content-Type'] && !headers['content-type']) {
-      headers['Content-Type'] = 'application/json';
-    }
-    const res = await fetch(url, { ...options, headers });
-    if (res.status === 401) {
-      logout();
-      throw new Error('Authentication expired');
-    }
-    return res;
+    } catch { return false; }
   };
 
   const value = {
@@ -159,9 +121,9 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
-    checkAuth,         // local
-    serverCheckAuth,   // remoto (opcional)
-    authenticatedFetch,
+    checkAuth,        // local
+    serverCheckAuth,  // remoto (opcional)
+    authenticatedFetch, // helper central
     getToken: () => token || localStorage.getItem('authToken'),
     isAuthenticated: !!user,
     isAdmin: user?.role === 'ADMIN',
