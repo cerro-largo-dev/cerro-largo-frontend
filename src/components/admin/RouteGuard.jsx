@@ -1,13 +1,12 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth.jsx';
 import { useRole } from '../../hooks/useRole';
 
 const RouteGuard = ({ children, requiredRoles = [], redirectTo = '/login' }) => {
   const { isAuthenticated, loading } = useAuth();
   const { hasAnyRole } = useRole();
 
-  // Mostrar loading mientras se verifica la autenticación
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -16,12 +15,10 @@ const RouteGuard = ({ children, requiredRoles = [], redirectTo = '/login' }) => 
     );
   }
 
-  // Si no está autenticado, redirigir al login
   if (!isAuthenticated) {
     return <Navigate to={redirectTo} replace />;
   }
 
-  // Si se requieren roles específicos, verificar que el usuario los tenga
   if (requiredRoles.length > 0 && !hasAnyRole(requiredRoles)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -39,9 +36,7 @@ const RouteGuard = ({ children, requiredRoles = [], redirectTo = '/login' }) => 
     );
   }
 
-  // Si todo está bien, renderizar los children
   return children;
 };
 
 export default RouteGuard;
-
