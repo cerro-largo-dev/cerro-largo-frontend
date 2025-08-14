@@ -1,510 +1,343 @@
-// AdminPanel.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect } from 'react';
 
 /**
- * AdminPanel unificado
- *
- * Características:
- * - Toggle flotante inferior (mostrar/ocultar panel).
- * - Autenticación con cookie de sesión: check-auth / login / logout.
- * - Carga de zonas desde /api/admin/zones.
- * - Actualización de estado por zona y actualización masiva (loop sobre update-state).
- * - Descarga de reporte PDF desde /api/report/generate-pdf.
- * - Indicador de salud DB desde /api/admin/db-check (opcional).
- * - Callbacks opcionales: onZoneStateChange, onBulkZoneStatesUpdate, onRefreshZoneStates.
- *
- * Props opcionales:
- * - backendUrl: string. Por defecto "https://cerro-largo-backend.onrender.com".
- * - initiallyVisible: boolean. Panel desplegado al inicio (false por defecto).
- * - onZoneStateChange(zoneName, stateEn)
- * - onBulkZoneStatesUpdate(zonesArray, stateEn)
- * - onRefreshZoneStates()
+ * AdminPanel_3 integrado con backend y login del AdminPanel4.
+ * - Usa BACKEND_URL para todas las llamadas (login, zonas, update-state, logout, reporte).
+ * - Carga de zonas desde `${BACKEND_URL}/api/admin/zones` al autenticar.
+ * - Update state a `${BACKEND_URL}/api/admin/update-state` (compatibilidad con AdminPanel4).
+ * - Descarga de reporte desde `${BACKEND_URL}/api/report/generate-pdf`.
+ * - Soporta estados "verde/amarillo/rojo" y también "green/yellow/red" de forma transparente.
+ * - Si se pasan props zones/zoneStates, las usa como iniciales; luego sincroniza con backend.
  */
-export default function AdminPanel({
-  backendUrl = "https://cerro-largo-backend.onrender.com",
-  initiallyVisible = false,
-  onZoneStateChange,
-  onBulkZoneStatesUpdate,
-  onRefreshZoneStates,
-}) {
-  // UI
-  const [isVisible, setIsVisible] = useState(initiallyVisible);
-  const [isLoading, setIsLoading] = useState(false);
-  const [busyMsg, setBusyMsg] = useState("");
-
-  // Auth
+const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones: zonesProp = [] }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authChecking, setAuthChecking] = useState(true);
-  const [email, setEmail] = useState(""); // opcional si backend lo requiere
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState('');
+  const [isVisible, setIsVisible] = useState(false);
+  const [selectedZone, setSelectedZone] = useState('');
+  const [selectedState, setSelectedState] = useState('verde');
+  const [isLoading, setIsLoading] = useState(false);
+  const [zones, setZones] = useState(zonesProp);
+  const [zoneStates, setZoneStates] = useState(zoneStatesProp);
 
-  // Data
-  const [zones, setZones] = useState([]); // [{name, state}]
-  const [selectedZone, setSelectedZone] = useState("");
-  const [selectedZones, setSelectedZones] = useState([]); // para bulk
-  const [selectedState, setSelectedState] = useState("green"); // interno en inglés
-  const [dbHealthy, setDbHealthy] = useState(null); // true/false/null
+  // Permite sobreescribir por env o window. Fallback al Render del proyecto
+  const BACKEND_URL =
+    (typeof window !== 'undefined' && window.BACKEND_URL) ||
+    (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
+    'https://cerro-largo-backend.onrender.com';
 
-  // Helpers de estado (interno en inglés; UI en español)
-  const esToEn = { verde: "green", amarillo: "yellow", rojo: "red" };
-  const enToEs = { green: "verde", yellow: "amarillo", red: "rojo" };
-
-  const stateLabel = useMemo(
-    () => ({
-      green: "🟩 Habilitado",
-      yellow: "🟨 Alerta",
-      red: "🟥 Suspendido",
-    }),
-    []
-  );
-
-  const getStateColor = (s) =>
-    s === "green" ? "#22c55e" : s === "yellow" ? "#eab308" : s === "red" ? "#ef4444" : "#6b7280";
-
-  // Normaliza valores de state recibidos (acepta 'verde/amarillo/rojo' o 'green/yellow/red')
-  const normalizeState = (value) => {
-    if (!value) return null;
-    const v = String(value).toLowerCase();
-    if (v in enToEs) return v; // ya es en
-    if (v in esToEn) return esToEn[v]; // convertir a en
-    return null;
-  };
-
-  // --- API helpers
-  const api = (path, init = {}) =>
-    fetch(`${backendUrl}${path}`, { credentials: "include", ...init });
-
-  const checkAuthentication = async () => {
-    try {
-      const res = await api("/api/admin/check-auth");
-      const data = await res.json().catch(() => ({}));
-      setIsAuthenticated(Boolean(data?.authenticated || data?.success));
-    } catch (e) {
-      console.error("check-auth error:", e);
-      setIsAuthenticated(false);
-    } finally {
-      setAuthChecking(false);
-    }
-  };
-
-  const login = async (e) => {
-    e?.preventDefault?.();
-    setIsLoading(true);
-    setBusyMsg("Verificando credenciales…");
-    try {
-      const body =
-        email?.trim()
-          ? { email: email.trim(), password }
-          : { password };
-      const res = await api("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && (data?.success || data?.authenticated)) {
-        setIsAuthenticated(true);
-        setPassword("");
-        await Promise.all([loadZones(), dbCheck()]);
-        alert("Autenticación exitosa");
-      } else {
-        alert(data?.message || "Contraseña o credenciales incorrectas");
-      }
-    } catch (e) {
-      console.error("login error:", e);
-      alert("Error de conexión");
-    } finally {
-      setIsLoading(false);
-      setBusyMsg("");
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await api("/api/admin/logout", { method: "POST" });
-      setIsAuthenticated(false);
-      setIsVisible(false);
-    } catch (e) {
-      console.error("logout error:", e);
-    }
-  };
-
-  const dbCheck = async () => {
-    try {
-      const res = await api("/api/admin/db-check");
-      setDbHealthy(res.ok);
-    } catch {
-      setDbHealthy(false);
-    }
-  };
-
-  const loadZones = async () => {
-    try {
-      const res = await api("/api/admin/zones");
-      if (!res.ok) return;
-      const data = await res.json();
-      // Se espera: array [{name, state}]
-      const normalized = Array.isArray(data)
-        ? data.map((z) => ({
-            name: z?.name || z?.zone || "",
-            state: normalizeState(z?.state) || "yellow",
-          }))
-        : [];
-      setZones(normalized);
-    } catch (e) {
-      console.error("loadZones error:", e);
-    }
-  };
-
-  const updateZoneState = async (zoneName, stateEn) => {
-    const body = { zone_name: zoneName, state: stateEn };
-    const res = await api("/api/admin/zones/update-state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.success) {
-      throw new Error(data?.message || "Falló la actualización");
-    }
-  };
-
-  const handleUpdateSingle = async () => {
-    if (!selectedZone || !selectedState) {
-      alert("Selecciona una zona y un estado");
-      return;
-    }
-    setIsLoading(true);
-    setBusyMsg("Actualizando estado…");
-    try {
-      await updateZoneState(selectedZone, selectedState);
-      // Refrescar
-      await loadZones();
-      onZoneStateChange?.(selectedZone, selectedState);
-      alert("Estado actualizado correctamente");
-      setSelectedZone("");
-      setSelectedState("green");
-    } catch (e) {
-      console.error(e);
-      alert(e.message || "Error al actualizar estado");
-    } finally {
-      setIsLoading(false);
-      setBusyMsg("");
-    }
-  };
-
-  const handleUpdateBulk = async () => {
-    if (!selectedZones.length || !selectedState) {
-      alert("Selecciona una o más zonas y un estado");
-      return;
-    }
-    setIsLoading(true);
-    setBusyMsg(`Actualizando ${selectedZones.length} zonas…`);
-    try {
-      for (const zn of selectedZones) {
-        // Ejecuta en serie para evitar saturar el backend
-        // (si prefieres en paralelo, usa Promise.all)
-        await updateZoneState(zn, selectedState);
-      }
-      await loadZones();
-      onBulkZoneStatesUpdate?.(selectedZones, selectedState);
-      alert("Actualización masiva completada");
-      setSelectedZones([]);
-      setSelectedState("green");
-    } catch (e) {
-      console.error(e);
-      alert(e.message || "Error en actualización masiva");
-    } finally {
-      setIsLoading(false);
-      setBusyMsg("");
-    }
-  };
-
-  const downloadReport = async () => {
-    setIsLoading(true);
-    setBusyMsg("Generando reporte…");
-    try {
-      const res = await api("/api/report/generate-pdf", { method: "GET" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.message || "No se pudo generar el reporte");
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = url;
-      a.download = `reporte_camineria_cerro_largo_${new Date()
-        .toISOString()
-        .slice(0, 10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      alert("Reporte descargado");
-    } catch (e) {
-      console.error(e);
-      alert(e.message || "Error al descargar reporte");
-    } finally {
-      setIsLoading(false);
-      setBusyMsg("");
-    }
-  };
-
-  const refreshAll = async () => {
-    setIsLoading(true);
-    setBusyMsg("Actualizando datos…");
-    try {
-      await Promise.all([loadZones(), dbCheck()]);
-      onRefreshZoneStates?.();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-      setBusyMsg("");
-    }
-  };
-
-  // --- effects
   useEffect(() => {
     checkAuthentication();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      refreshAll();
+  const normalizeToEs = (state) => {
+    if (!state) return 'sin-estado';
+    const s = String(state).toLowerCase();
+    const map = {
+      green: 'verde',
+      yellow: 'amarillo',
+      red: 'rojo',
+      verde: 'verde',
+      amarillo: 'amarillo',
+      rojo: 'rojo',
+    };
+    return map[s] || 'sin-estado';
+  };
+
+  const getStateColor = (state) => {
+    const s = normalizeToEs(state);
+    switch (s) {
+      case 'verde':
+        return '#22c55e';
+      case 'amarillo':
+        return '#eab308';
+      case 'rojo':
+        return '#ef4444';
+      default:
+        return '#6b7280';
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  };
 
-  // --- UI
-  const dbPill =
-    dbHealthy == null
-      ? "bg-gray-200 text-gray-700"
-      : dbHealthy
-      ? "bg-green-100 text-green-700"
-      : "bg-red-100 text-red-700";
+  const getStateLabel = (state) => {
+    const s = normalizeToEs(state);
+    switch (s) {
+      case 'verde':
+        return '🟩 Habilitado';
+      case 'amarillo':
+        return '🟨 Alerta';
+      case 'rojo':
+        return '🟥 Suspendido';
+      default:
+        return 'Sin estado';
+    }
+  };
 
-  if (!isVisible) {
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/check-auth`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        if (data.authenticated === true || data.success === true) {
+          setIsAuthenticated(true);
+          await loadZones();
+        }
+      }
+    } catch (error) {
+      // Silencioso
+      console.error('Error verificando autenticación:', error);
+    }
+  };
+
+  const loadZones = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/zones`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const zonesData = await response.json();
+        // zonesData puede ser array de strings o de objetos {name, state}
+        setZones(Array.isArray(zonesData) ? zonesData : []);
+        const mapping = {};
+        (zonesData || []).forEach((z) => {
+          if (typeof z === 'string') {
+            mapping[z] = mapping[z] || 'verde';
+          } else if (z && (z.name || z.zone)) {
+            const name = z.name || z.zone;
+            mapping[name] = normalizeToEs(z.state);
+          }
+        });
+        setZoneStates((prev) => ({ ...prev, ...mapping }));
+      }
+    } catch (error) {
+      console.error('Error cargando zonas:', error);
+    }
+  };
+
+  const handleLogin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ password }),
+      });
+
+      if (response.ok) {
+        setIsAuthenticated(true);
+        setPassword('');
+        await loadZones();
+        alert('Autenticación exitosa');
+      } else {
+        let msg = 'Contraseña incorrecta';
+        try {
+          const err = await response.json();
+          if (err && err.message) msg = err.message;
+        } catch (_) {}
+        alert(msg);
+      }
+    } catch (error) {
+      console.error('Error en login:', error);
+      alert('Error de conexión');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      setIsAuthenticated(false);
+      setIsVisible(false);
+    } catch (error) {
+      console.error('Error en logout:', error);
+    }
+  };
+
+  const handleUpdateZoneState = async () => {
+    if (!selectedZone || !selectedState) {
+      alert('Selecciona una zona y un estado');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/update-state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          zone: selectedZone,
+          state: normalizeToEs(selectedState),
+        }),
+      });
+
+      if (response.ok) {
+        setZoneStates((prev) => ({ ...prev, [selectedZone]: normalizeToEs(selectedState) }));
+        if (typeof onZoneStateChange === 'function') {
+          onZoneStateChange(selectedZone, normalizeToEs(selectedState));
+        }
+        alert('Estado actualizado correctamente');
+        setSelectedZone('');
+        setSelectedState('verde');
+        // Refrescar listado de zonas (por si el backend devuelve estados)
+        await loadZones();
+      } else {
+        let msg = 'Error al actualizar estado';
+        try {
+          const err = await response.json();
+          if (err && err.message) msg = err.message;
+        } catch (_) {}
+        alert(msg);
+      }
+    } catch (error) {
+      console.error('Error actualizando estado:', error);
+      alert('Error de conexión');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/report/generate-pdf`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `reporte_camineria_cerro_largo_${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        alert('Reporte descargado correctamente');
+      } else {
+        let msg = 'Error al generar reporte';
+        try {
+          const err = await response.json();
+          if (err && err.message) msg = err.message;
+        } catch (_) {}
+        alert(msg);
+      }
+    } catch (error) {
+      console.error('Error descargando reporte:', error);
+      alert('Error de conexión al descargar reporte');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const zoneNameOf = (z) => (typeof z === 'string' ? z : (z && (z.name || z.zone)) || '');
+
+  if (!isAuthenticated) {
     return (
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000]">
-        <button
-          onClick={() => setIsVisible(true)}
-          className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-gray-700 transition-colors"
-        >
-          ▲ Admin
+      <div className={`admin-panel ${isVisible ? 'visible' : ''}`}>
+        <button className="admin-toggle" onClick={() => setIsVisible(!isVisible)}>
+          {isVisible ? '▼' : '▲'} Admin
         </button>
+
+        {isVisible && (
+          <div className="admin-content">
+            <h4>Acceso Administrador</h4>
+            <form onSubmit={handleLogin}>
+              <input
+                type="password"
+                placeholder="Contraseña"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+              />
+              <button type="submit" disabled={isLoading}>
+                {isLoading ? 'Verificando...' : 'Ingresar'}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 shadow-lg z-[1000] p-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-gray-800">
-              Panel de Administración
-            </h3>
-            <span
-              className={`text-xs px-2 py-1 rounded ${dbPill}`}
-              title="Estado de base de datos"
-            >
-              DB:{" "}
-              {dbHealthy == null ? "—" : dbHealthy ? "OK" : "Error"}
-            </span>
-            {isLoading && (
-              <span className="text-xs text-gray-500">{busyMsg}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {isAuthenticated && (
-              <>
-                <button
-                  onClick={refreshAll}
-                  className="text-sm bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-1.5 rounded"
-                >
-                  ↻ Refrescar
-                </button>
-                <button
-                  onClick={downloadReport}
-                  className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded"
-                >
-                  📄 Reporte
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => setIsVisible(false)}
-              className="text-gray-600 hover:text-gray-800 text-xl leading-none"
-            >
-              ✕
+    <div className={`admin-panel authenticated ${isVisible ? 'visible' : ''}`}>
+      <button className="admin-toggle" onClick={() => setIsVisible(!isVisible)}>
+        {isVisible ? '▼' : '▲'} Panel Admin
+      </button>
+
+      {isVisible && (
+        <div className="admin-content">
+          <div className="admin-header">
+            <h4>Panel de Control</h4>
+            <button onClick={handleLogout} className="logout-btn">
+              Cerrar Sesión
             </button>
           </div>
-        </div>
 
-        {!isAuthenticated ? (
-          <form
-            onSubmit={login}
-            className="mt-4 flex flex-wrap items-end gap-3"
-          >
-            <div className="flex flex-col">
-              <label className="text-xs text-gray-600">Email (opcional)</label>
-              <input
-                type="email"
-                value={email}
-                autoComplete="username"
-                onChange={(e) => setEmail(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm min-w-[260px]"
-                placeholder="admin@dominio (si tu backend lo requiere)"
-                disabled={authChecking || isLoading}
-              />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs text-gray-600">Contraseña</label>
-              <input
-                type="password"
-                value={password}
-                autoComplete="current-password"
-                onChange={(e) => setPassword(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm min-w-[220px]"
-                placeholder="••••••••"
-                disabled={authChecking || isLoading}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={authChecking || isLoading || !password}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm"
-            >
-              {isLoading ? "Verificando…" : "Ingresar"}
-            </button>
-          </form>
-        ) : (
-          <>
-            {/* Controles de actualización */}
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="border rounded-lg p-3">
-                <h4 className="font-medium text-sm mb-2">Actualización individual</h4>
-                <div className="flex flex-col gap-2">
-                  <select
-                    className="border border-gray-300 rounded px-3 py-2 text-sm"
-                    value={selectedZone}
-                    onChange={(e) => setSelectedZone(e.target.value)}
-                  >
-                    <option value="">Seleccionar zona…</option>
-                    {zones.map((z) => (
-                      <option key={z.name} value={z.name}>
-                        {z.name} —{" "}
-                        {stateLabel[normalizeState(z.state) || "yellow"]}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="border border-gray-300 rounded px-3 py-2 text-sm"
-                    value={selectedState}
-                    onChange={(e) => setSelectedState(e.target.value)}
-                  >
-                    <option value="green">🟩 Habilitado</option>
-                    <option value="yellow">🟨 Alerta</option>
-                    <option value="red">🟥 Suspendido</option>
-                  </select>
-
-                  <button
-                    onClick={handleUpdateSingle}
-                    disabled={!selectedZone || isLoading}
-                    className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 disabled:bg-gray-400"
-                  >
-                    {isLoading ? "Actualizando…" : "Actualizar estado"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="border rounded-lg p-3 md:col-span-2">
-                <h4 className="font-medium text-sm mb-2">Actualización masiva</h4>
-                <div className="flex flex-col gap-2 max-h-44 overflow-auto border rounded p-2">
-                  {zones.map((z) => (
-                    <label key={z.name} className="text-sm flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedZones.includes(z.name)}
-                        onChange={(e) => {
-                          setSelectedZones((prev) =>
-                            e.target.checked
-                              ? [...prev, z.name]
-                              : prev.filter((n) => n !== z.name)
-                          );
-                        }}
-                      />
-                      <span className="flex-1">
-                        {z.name} —{" "}
-                        <span style={{ color: getStateColor(normalizeState(z.state)) }}>
-                          {stateLabel[normalizeState(z.state) || "yellow"]}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="mt-2 flex items-center gap-2">
-                  <select
-                    className="border border-gray-300 rounded px-3 py-2 text-sm"
-                    value={selectedState}
-                    onChange={(e) => setSelectedState(e.target.value)}
-                  >
-                    <option value="green">🟩 Habilitado</option>
-                    <option value="yellow">🟨 Alerta</option>
-                    <option value="red">🟥 Suspendido</option>
-                  </select>
-                  <button
-                    onClick={handleUpdateBulk}
-                    disabled={!selectedZones.length || isLoading}
-                    className="bg-amber-600 text-white px-3 py-2 rounded text-sm hover:bg-amber-700 disabled:bg-gray-400"
-                  >
-                    {isLoading ? "Actualizando…" : `Aplicar a ${selectedZones.length} zona(s)`}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Lista de estados actuales */}
-            <div className="mt-4 border rounded-lg p-3">
-              <h4 className="font-medium text-sm mb-2">Estados actuales</h4>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {zones.map((z) => {
-                  const st = normalizeState(z.state) || "yellow";
+          <div className="zone-controls">
+            <div className="control-group">
+              <label>Zona/Municipio:</label>
+              <select value={selectedZone} onChange={(e) => setSelectedZone(e.target.value)}>
+                <option value="">Seleccionar zona...</option>
+                {(zones && zones.length > 0 ? zones : zonesProp).map((z) => {
+                  const name = zoneNameOf(z);
                   return (
-                    <div
-                      key={z.name}
-                      className="flex items-center justify-between border rounded px-3 py-2 text-sm"
-                    >
-                      <span className="font-medium">{z.name}</span>
-                      <span style={{ color: getStateColor(st) }}>
-                        {stateLabel[st]}
-                      </span>
-                    </div>
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
                   );
                 })}
-              </div>
+              </select>
             </div>
 
-            {/* Acciones inferiores */}
-            <div className="mt-4 flex items-center justify-between">
-              <button
-                onClick={logout}
-                className="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded"
-              >
-                Cerrar sesión
-              </button>
-              <div className="text-xs text-gray-500">
-                Backend: <code>{backendUrl}</code>
-              </div>
+            <div className="control-group">
+              <label>Estado:</label>
+              <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)}>
+                <option value="verde">🟩 Habilitado</option>
+                <option value="amarillo">🟨 Alerta</option>
+                <option value="rojo">🟥 Suspendido</option>
+              </select>
             </div>
-          </>
-        )}
-      </div>
+
+            <div className="button-group">
+              <button onClick={handleUpdateZoneState} disabled={isLoading || !selectedZone} className="update-btn">
+                {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
+              </button>
+
+              <button onClick={handleDownloadReport} disabled={isLoading} className="report-btn">
+                {isLoading ? 'Generando...' : '📄 Descargar Reporte'}
+              </button>
+            </div>
+          </div>
+
+          <div className="current-states">
+            <h5>Estados Actuales:</h5>
+            <div className="states-list">
+              {Object.entries(zoneStates).map(([zone, state]) => (
+                <div key={zone} className="state-item">
+                  <span className="zone-name">{zone}</span>
+                  <span className="state-indicator" style={{ color: getStateColor(state) }}>
+                    {getStateLabel(state)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default AdminPanel;
