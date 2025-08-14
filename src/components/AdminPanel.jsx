@@ -9,7 +9,7 @@ const AdminPanel = ({ onZoneStateChange }) => {
   const [selectedState, setSelectedState] = useState('verde');
   const [isLoading, setIsLoading] = useState(false);
 
-  const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
+  const BACKEND_URL = 'https://cerro-largo-backend.onrender.com';
 
   const loadZones = async () => {
     try {
