@@ -80,6 +80,19 @@ export default function AdminPanel({ onZoneStateChange }) {
 
   const API = (p) => `${String(BACKEND_URL || '').replace(/\/$/, '')}${p}`;
 
+  // Verifica sesión SIN asumir autenticación por leer /zones/states
+  async function checkAuth() {
+    try {
+      const d = await fetchJsonStrict(API('/api/admin/check-auth'));
+      if (d?.authenticated === true || d?.success === true) {
+        setIsAuthed(true);
+      }
+    } catch (_) {
+      // si no existe el endpoint, se mantiene no autenticado
+    }
+  }
+
+
   // Intenta detectar si ya hay sesión válida: si /zones/states devuelve JSON, asumimos autenticado.
   useEffect(() => {
     let mounted = true;
@@ -156,6 +169,7 @@ export default function AdminPanel({ onZoneStateChange }) {
   }
 
   async function handleUpdateOne() {
+    if (!isAuthed) { alert('Inicia sesión para actualizar estados.'); return; }
     if (!selectedZone) { alert('Selecciona una zona.'); return; }
     if (!BACKEND_URL) { alert('Configura BACKEND_URL.'); return; }
     setLoading(true); setMsg('');
