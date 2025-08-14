@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Función para decodificar JWT (sin verificar firma, solo para leer payload)
+  // Función para decodificar JWT
   const decodeToken = (token) => {
     try {
       const base64Url = token.split('.')[1];
@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
     return Date.now() >= decoded.exp * 1000;
   };
 
-  // Función para cargar el usuario desde localStorage al iniciar
+  // Cargar usuario desde localStorage
   useEffect(() => {
     const storedToken = localStorage.getItem('authToken');
     if (storedToken && !isTokenExpired(storedToken)) {
@@ -61,22 +61,18 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  // Función para hacer login
+  // Login
   const login = async (email, password) => {
     try {
       const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        const { token: newToken, role, municipio_id } = data;
-        
-        // Decodificar el token para obtener información del usuario
+        const { token: newToken } = data;
         const decoded = decodeToken(newToken);
         if (decoded) {
           const userData = {
@@ -85,11 +81,9 @@ export const AuthProvider = ({ children }) => {
             role: decoded.role,
             municipio_id: decoded.municipio_id
           };
-
           setToken(newToken);
           setUser(userData);
           localStorage.setItem('authToken', newToken);
-          
           return { success: true, user: userData };
         }
       } else {
@@ -102,29 +96,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Función para hacer logout
+  // Logout
   const logout = () => {
     setToken(null);
     setUser(null);
     localStorage.removeItem('authToken');
   };
 
-  // Función para verificar autenticación con el servidor
+  // Verificar autenticación en servidor
   const checkAuth = async () => {
     if (!token) return false;
-
     try {
       const response = await fetch('https://cerro-largo-backend.onrender.com/api/admin/check-auth', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
-
       if (response.ok) {
         const data = await response.json();
         return data.authenticated;
       } else {
-        // Token inválido, hacer logout
         logout();
         return false;
       }
@@ -134,32 +123,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Función para obtener el token actual
+  // Obtener token
   const getToken = () => token;
 
-  // Función para hacer requests autenticados
+  // Fetch autenticado
   const authenticatedFetch = async (url, options = {}) => {
-    if (!token) {
-      throw new Error('No authentication token available');
-    }
-
+    if (!token) throw new Error('No authentication token available');
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
       ...options.headers,
     };
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    // Si el token ha expirado, hacer logout
+    const response = await fetch(url, { ...options, headers });
     if (response.status === 401) {
       logout();
       throw new Error('Authentication expired');
     }
-
     return response;
   };
 
@@ -184,4 +163,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
