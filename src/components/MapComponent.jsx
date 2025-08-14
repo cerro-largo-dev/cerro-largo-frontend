@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Popup, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
 import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
@@ -8,7 +8,6 @@ import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 import { zonesAPI, BACKEND_URL } from '@/lib/api.js';
 import { useAuth } from '@/hooks/useAuth.jsx';
 
-// Config Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
@@ -16,7 +15,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Icono GPS
 const gpsIcon = new L.Icon({
   iconUrl: 'data:image/svg+xml;base64,' + btoa(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="24" height="24">
@@ -30,27 +28,20 @@ const gpsIcon = new L.Icon({
   className: 'gps-marker-icon'
 });
 
-// Colores por estado
 const stateColors = { green: "#22c55e", yellow: '#eab308', red: '#ef4444' };
 
-// Componente para manejar zoom
 function ZoomHandler({ onZoomChange }) {
   const map = useMap();
   useEffect(() => {
-    const handleZoom = () => onZoomChange(map.getZoom());
-    map.on('zoomend', handleZoom);
+    const h = () => onZoomChange(map.getZoom());
+    map.on('zoomend', h);
     onZoomChange(map.getZoom());
-    return () => map.off('zoomend', handleZoom);
+    return () => map.off('zoomend', h);
   }, [map, onZoomChange]);
   return null;
 }
 
-function MapComponent({
-  zoneStates,
-  onZoneStatesLoad,
-  onZonesLoad,
-  userLocation
-}) {
+function MapComponent({ zoneStates, onZoneStatesLoad, onZonesLoad, userLocation }) {
   const { isAuthenticated } = useAuth();
 
   const [geoData, setGeoData] = useState(null);
@@ -59,14 +50,16 @@ function MapComponent({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [currentZoom, setCurrentZoom] = useState(9);
-  const mapRef = useRef(null);
+
+  const onZonesLoadRef = useRef(onZonesLoad);
+  useEffect(() => { onZonesLoadRef.current = onZonesLoad; }, [onZonesLoad]);
 
   const mapCenter = [-32.55, -54.00];
 
   const handleZoomChange = (z) => setCurrentZoom(z);
   const getRoadStyleWithZoom = (feature) => getRoadStyle(feature, currentZoom);
 
-  // Carga de capas estáticas (no requieren auth)
+  // Cargar capas estáticas SOLO UNA VEZ (evita loop por función-prop)
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -86,12 +79,11 @@ function MapComponent({
         setMeloAreaGeoData(meloData);
         setCaminosData(caminosDataJson);
 
-        // Notificar zonas disponibles al padre
         const allZones = [
           ...municipalitiesData.features.map(f => f.properties.municipio),
           ...meloData.features.map(f => `Melo (${f.properties.serie})`)
         ];
-        onZonesLoad?.(allZones);
+        onZonesLoadRef.current?.(allZones);
       } catch (e) {
         console.error("Error cargando datos del mapa:", e);
         setMessage({ type: 'error', text: 'Error al cargar datos del mapa' });
@@ -100,18 +92,18 @@ function MapComponent({
       }
     };
     loadData();
-  }, [onZonesLoad]);
+    // ← deps vacías: solo una vez
+  }, []);
 
-  // Carga de estados (sí requiere auth)
+  // Cargar estados (requiere auth) una vez hay sesión
   useEffect(() => {
-    if (!isAuthenticated) return; // evita 401 si no hay sesión
+    if (!isAuthenticated) return;
     loadZoneStates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const loadZoneStates = async () => {
     try {
-      const res = await zonesAPI.getStates(); // ← usa Authorization automáticamente
+      const res = await zonesAPI.getStates();
       if (!res.ok) {
         if (res.status === 401) {
           setMessage({ type: 'error', text: 'Sesión expirada o no iniciada.' });
@@ -173,7 +165,6 @@ function MapComponent({
     });
   };
 
-  // Descarga de reporte público (si tu endpoint es público; si es admin protégelo)
   const downloadReport = async () => {
     try {
       setLoading(true);
@@ -217,34 +208,31 @@ function MapComponent({
         </button>
       </div>
 
-      <MapContainer center={mapCenter} zoom={9} className="leaflet-container" style={{ width: '100%', height: '100%' }}>
+      <MapContainer center={[-32.55, -54.00]} zoom={9} className="leaflet-container" style={{ width: '100%', height: '100%' }}>
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          attribution='&copy; OpenStreetMap'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {geoData && geoData.features.length > 0 && (
+        {geoData && (
           <GeoJSON
             data={geoData}
             style={getFeatureStyle}
             onEachFeature={onEachFeature}
-            key={`municipalities-${JSON.stringify(zoneStates)}`}
           />
         )}
-        {meloAreaGeoData && meloAreaGeoData.features.length > 0 && (
+        {meloAreaGeoData && (
           <GeoJSON
             data={meloAreaGeoData}
             style={getFeatureStyle}
             onEachFeature={onEachFeature}
-            key={`melo-${JSON.stringify(zoneStates)}`}
           />
         )}
-        {caminosData && caminosData.features.length > 0 && (
+        {caminosData && (
           <GeoJSON
             data={caminosData}
             style={getRoadStyleWithZoom}
             onEachFeature={onEachRoadFeature}
-            key={`caminos-layer-zoom-${currentZoom}`}
             pathOptions={{ interactive: true, bubblingMouseEvents: false }}
           />
         )}
@@ -267,4 +255,5 @@ function MapComponent({
 }
 
 export default MapComponent;
+
 
