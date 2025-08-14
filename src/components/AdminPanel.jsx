@@ -1,35 +1,58 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-/**
- * AdminPanel
- *
- * Props:
- * - zones: Array<string|number|object>   // lista de zonas (id/nombre u objeto)
- * - zoneStates: Record<string, string>   // { [zoneId]: state }
- * - onZoneStateChange?: (zoneId, newState) => void
- * - onBulkUpdate?: (updates: Record<string,string>) => void
- * - onBulkZoneStatesUpdate?: (updates: Record<string,string>) => void // alias compatible
- * - onRefreshZoneStates?: () => void
- * - stateOptions?: string[]              // ej. ["OK","PRECAUCIÓN","CERRADA"]
- */
-export default function AdminPanel({
-  zones = [],
-  zoneStates = {},
-  onZoneStateChange,
-  onBulkUpdate,
-  onBulkZoneStatesUpdate,
-  onRefreshZoneStates,
-  stateOptions,
-}) {
+// Ajusta este fallback si no usas Vite:
+const BACKEND_URL =
+  (typeof import.meta !== "undefined" &&
+    import.meta?.env?.VITE_BACKEND_URL) ||
+  "https://cerro-largo-backend.onrender.com";
+
+// Endpoints posibles para DB check (ajusta si usas otro)
+const DB_CHECK_PATHS = ["/api/admin/db-check", "/api/admin/db_check"];
+
+// Util para auth opcional (si guardas token tras /api/admin/login)
+function authHeader() {
+  const token =
+    localStorage.getItem("adminToken") ||
+    localStorage.getItem("token") ||
+    "";
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchJson(url, options = {}) {
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  // Intento parsear JSON incluso en 4xx/5xx
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {
+    // ignoro si no es JSON
+  }
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+export default function AdminPanel() {
   const [isOpen, setIsOpen] = useState(false);
+  const [dbOk, setDbOk] = useState(null); // null = sin chequear, true/false
+  const [dbMsg, setDbMsg] = useState("");
+  const [zonesRaw, setZonesRaw] = useState([]);
+  const [zoneStates, setZoneStates] = useState({});
   const [applyAllValue, setApplyAllValue] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const options = useMemo(
-    () => stateOptions && stateOptions.length
-      ? stateOptions
-      : ["OK", "PRECAUCIÓN", "CERRADA"],
-    [stateOptions]
-  );
+  const stateOptions = ["OK", "PRECAUCIÓN", "CERRADA"];
 
   const getZoneId = (z) => {
     if (z == null) return "";
@@ -60,29 +83,102 @@ export default function AdminPanel({
     ).toString();
   };
 
-  const bulkFn = onBulkUpdate || onBulkZoneStatesUpdate;
+  const getZoneStateFromObj = (z) => {
+    if (!z || typeof z !== "object") return "";
+    // intenta campos comunes
+    return (
+      z.state ??
+      z.status ??
+      z.estado ??
+      z.situacion ??
+      ""
+    );
+  };
+
+  const zones = useMemo(() => zonesRaw || [], [zonesRaw]);
+
+  const rebuildZoneStatesFromZones = (items) => {
+    const next = {};
+    for (const z of items) {
+      const id = getZoneId(z);
+      if (id) next[id] = getZoneStateFromObj(z) || "";
+    }
+    setZoneStates(next);
+  };
+
+  const dbCheck = async () => {
+    // Prueba múltiples rutas hasta que una responda OK
+    for (const path of DB_CHECK_PATHS) {
+      try {
+        const data = await fetchJson(`${BACKEND_URL}${path}`);
+        // Si tu endpoint devuelve otra forma, ajusta acá:
+        const ok =
+          data?.ok === true ||
+          data?.status === "ok" ||
+          data?.db === "ok" ||
+          data?.healthy === true;
+        const msg =
+          data?.message ||
+          data?.msg ||
+          (ok ? "DB OK" : "DB no OK");
+        setDbOk(!!ok);
+        setDbMsg(msg);
+        return !!ok;
+      } catch (e) {
+        // intenta siguiente path
+      }
+    }
+    setDbOk(false);
+    setDbMsg("DB check falló");
+    return false;
+  };
+
+  const loadZones = async () => {
+    const data = await fetchJson(`${BACKEND_URL}/api/admin/zones`);
+    // data puede ser { zones: [...] } o directamente [...]
+    const items = Array.isArray(data) ? data : data?.zones || [];
+    setZonesRaw(items);
+    rebuildZoneStatesFromZones(items);
+  };
+
+  const refreshAll = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const ok = await dbCheck();
+      if (ok) {
+        await loadZones();
+      }
+    } catch (e) {
+      setError(e.message || "Error al cargar");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Carga inicial al montar el componente
+    refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleApplyAll = () => {
-    if (!applyAllValue) return;
-    const updates = {};
-    for (const z of zones) {
-      const id = getZoneId(z);
-      if (id) updates[id] = applyAllValue;
-    }
-    if (Object.keys(updates).length && typeof bulkFn === "function") {
-      bulkFn(updates);
-    }
+    if (!applyAllValue || !zones.length) return;
+    setZoneStates((prev) => {
+      const next = { ...prev };
+      for (const z of zones) {
+        const id = getZoneId(z);
+        if (id) next[id] = applyAllValue;
+      }
+      return next;
+    });
   };
 
   const handlePerZoneChange = (zoneId, newState) => {
-    if (typeof onZoneStateChange === "function") {
-      onZoneStateChange(zoneId, newState);
-    }
+    setZoneStates((prev) => ({ ...prev, [zoneId]: newState }));
   };
 
-  // Estilos mínimos en línea para que funcione sin CSS externo.
-  // Si ya tienes clases .admin-toggle / .admin-panel en tu proyecto,
-  // se aplicarán encima sin problema.
+  // ——— UI ———
   const styles = {
     toggle: {
       position: "fixed",
@@ -102,7 +198,7 @@ export default function AdminPanel({
       left: 16,
       bottom: 72,
       zIndex: 9999,
-      width: 360,
+      width: 380,
       maxWidth: "calc(100vw - 32px)",
       maxHeight: "70vh",
       background: "#fff",
@@ -122,18 +218,15 @@ export default function AdminPanel({
       background: "#fafafa",
       fontWeight: 700,
     },
-    body: {
-      padding: 12,
-      overflow: "auto",
-    },
-    row: {
-      display: "grid",
-      gridTemplateColumns: "1fr 140px",
-      gap: 8,
-      alignItems: "center",
-      padding: "6px 0",
-      borderBottom: "1px dashed #f0f0f0",
-    },
+    badge: (ok) => ({
+      padding: "2px 8px",
+      borderRadius: 999,
+      fontSize: 12,
+      background: ok ? "#dcfce7" : "#fee2e2",
+      border: `1px solid ${ok ? "#16a34a" : "#ef4444"}`,
+      color: ok ? "#166534" : "#991b1b",
+    }),
+    body: { padding: 12, overflow: "auto" },
     controls: {
       display: "flex",
       gap: 8,
@@ -147,6 +240,14 @@ export default function AdminPanel({
       borderRadius: 8,
       border: "1px solid #ddd",
       background: "#fff",
+    },
+    row: {
+      display: "grid",
+      gridTemplateColumns: "1fr 150px",
+      gap: 8,
+      alignItems: "center",
+      padding: "6px 0",
+      borderBottom: "1px dashed #f0f0f0",
     },
     btn: {
       padding: "8px 10px",
@@ -163,18 +264,27 @@ export default function AdminPanel({
     },
     footer: {
       display: "flex",
-      justifyContent: "flex-end",
+      justifyContent: "space-between",
       gap: 8,
       padding: 12,
       borderTop: "1px solid #eee",
       background: "#fafafa",
+      alignItems: "center",
     },
     muted: { color: "#888", fontSize: 12 },
+    error: {
+      marginBottom: 8,
+      padding: "8px 10px",
+      borderRadius: 8,
+      border: "1px solid #ef4444",
+      background: "#fee2e2",
+      color: "#991b1b",
+      fontSize: 13,
+    },
   };
 
   return (
     <>
-      {/* Botón flotante para abrir/cerrar */}
       <button
         type="button"
         className="admin-toggle"
@@ -184,22 +294,29 @@ export default function AdminPanel({
         {isOpen ? "Cerrar" : "Panel Administración"}
       </button>
 
-      {/* Panel */}
       {isOpen && (
         <div className="admin-panel" style={styles.panel}>
           <div className="admin-panel__header" style={styles.header}>
             <span>Administración de Zonas</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {typeof onRefreshZoneStates === "function" && (
-                <button
-                  type="button"
-                  title="Refrescar"
-                  style={styles.btn}
-                  onClick={onRefreshZoneStates}
-                >
-                  Refrescar
-                </button>
-              )}
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={styles.badge(dbOk === true)}>
+                DB:{" "}
+                {dbOk === null
+                  ? "…"
+                  : dbOk
+                  ? "OK"
+                  : "NO OK"}
+                {dbMsg ? ` · ${dbMsg}` : ""}
+              </span>
+              <button
+                type="button"
+                title="Refrescar"
+                style={styles.btn}
+                onClick={refreshAll}
+                disabled={loading}
+              >
+                {loading ? "Cargando..." : "Refrescar"}
+              </button>
               <button
                 type="button"
                 title="Cerrar"
@@ -212,6 +329,15 @@ export default function AdminPanel({
           </div>
 
           <div style={styles.body}>
+            {error && <div style={styles.error}>{error}</div>}
+
+            {!dbOk && dbOk !== null && (
+              <div style={styles.error}>
+                La base no respondió OK. Verifica el endpoint de DB check en
+                <code> DB_CHECK_PATHS </code>.
+              </div>
+            )}
+
             {/* Controles masivos */}
             <div className="admin-panel__section" style={{ marginBottom: 12 }}>
               <div style={styles.controls}>
@@ -219,9 +345,10 @@ export default function AdminPanel({
                   style={styles.select}
                   value={applyAllValue}
                   onChange={(e) => setApplyAllValue(e.target.value)}
+                  disabled={!dbOk || loading}
                 >
                   <option value="">— Estado para TODAS —</option>
-                  {options.map((op) => (
+                  {stateOptions.map((op) => (
                     <option key={op} value={op}>
                       {op}
                     </option>
@@ -232,29 +359,35 @@ export default function AdminPanel({
                   type="button"
                   style={{ ...styles.btn, ...styles.btnPrimary }}
                   onClick={handleApplyAll}
-                  disabled={!applyAllValue || !zones.length || !bulkFn}
+                  disabled={!applyAllValue || !zones.length || !dbOk || loading}
                   title={
-                    bulkFn
-                      ? "Aplicar a todas las zonas"
-                      : "Falta prop onBulkUpdate/onBulkZoneStatesUpdate"
+                    !dbOk
+                      ? "DB no OK"
+                      : !zones.length
+                      ? "Sin zonas"
+                      : "Aplicar a todas"
                   }
                 >
                   Aplicar a todas
                 </button>
               </div>
-              {!bulkFn && (
-                <div style={styles.muted}>
-                  Sugerencia: pasa <code>onBulkUpdate</code> o{" "}
-                  <code>onBulkZoneStatesUpdate</code> para aplicar cambios masivos.
-                </div>
-              )}
+              <div style={styles.muted}>
+                Nota: los cambios aquí son locales (UI). Conecta tus endpoints de
+                guardado si querés persistir.
+              </div>
             </div>
 
             {/* Lista de zonas */}
             <div className="admin-panel__section">
-              {zones.length === 0 ? (
+              {dbOk && loading && (
+                <div style={styles.muted}>Cargando zonas…</div>
+              )}
+
+              {dbOk && !loading && zones.length === 0 && (
                 <div style={styles.muted}>No hay zonas para mostrar.</div>
-              ) : (
+              )}
+
+              {dbOk &&
                 zones.map((z) => {
                   const id = getZoneId(z);
                   const label = getZoneLabel(z);
@@ -267,9 +400,10 @@ export default function AdminPanel({
                         style={styles.select}
                         value={current}
                         onChange={(e) => handlePerZoneChange(id, e.target.value)}
+                        disabled={loading}
                       >
                         <option value="">— Seleccionar —</option>
-                        {options.map((op) => (
+                        {stateOptions.map((op) => (
                           <option key={op} value={op}>
                             {op}
                           </option>
@@ -277,16 +411,16 @@ export default function AdminPanel({
                       </select>
                     </div>
                   );
-                })
-              )}
+                })}
             </div>
           </div>
 
           <div className="admin-panel__footer" style={styles.footer}>
             <span style={styles.muted}>
-              {zones.length
-                ? `${zones.length} zona(s)`
-                : "Sin zonas cargadas"}
+              {zones.length ? `${zones.length} zona(s)` : "Sin zonas"}
+            </span>
+            <span style={styles.muted}>
+              {BACKEND_URL}
             </span>
           </div>
         </div>
