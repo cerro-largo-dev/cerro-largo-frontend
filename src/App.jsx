@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
 import AdminIndex from './pages/admin'; // Importar el index del panel de administración
 import './App.css';
