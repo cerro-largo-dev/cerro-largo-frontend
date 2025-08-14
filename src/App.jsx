@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
-import AdminPanel from './components/AdminPanel';
+import AdminIndex from './pages/admin'; // Importar el index del panel de administración
 import './App.css';
 import ReportButton from './components/Reportes/ReportButton';
 
@@ -102,19 +103,23 @@ function App() {
 
   return (
     <div className="app-container">
-      <MapComponent 
-        zoneStates={zoneStates}
-        onZoneStatesLoad={handleZoneStatesLoad}
-        onZoneStateChange={handleZoneStateChange}
-        onZonesLoad={handleZonesLoad}
-        userLocation={userLocation} // Pasar la ubicación del usuario al MapComponent
-      />
-      
-      <ReportButton onLocationChange={handleUserLocationChange} /> {/* Pasar el callback al ReportButton */}
+      <Routes>
+        <Route path="/admin/*" element={<AdminIndex />} />
+        <Route path="/*" element={
+          <>
+            <MapComponent 
+              zoneStates={zoneStates}
+              onZoneStatesLoad={handleZoneStatesLoad}
+              onZoneStateChange={handleZoneStateChange}
+              onZonesLoad={handleZonesLoad}
+              userLocation={userLocation} // Pasar la ubicación del usuario al MapComponent
+            />
+            <ReportButton onLocationChange={handleUserLocationChange} /> {/* Pasar el callback al ReportButton */}
+          </>
+        } />
+      </Routes>
     </div>
   );
 }
 
 export default App;
-
-
