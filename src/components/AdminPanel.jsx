@@ -395,3 +395,7 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
 
 export default AdminPanel;
 
+};
+
+export default AdminPanel;
+
