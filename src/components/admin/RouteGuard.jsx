@@ -1,12 +1,11 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth.jsx';
 import { useRole } from '../../hooks/useRole';
 
 const RouteGuard = ({ children, requiredRoles = [], redirectTo = '/login' }) => {
   const { isAuthenticated, loading } = useAuth();
   const { hasAnyRole } = useRole();
-  const location = useLocation();
 
   if (loading) {
     return (
@@ -16,21 +15,10 @@ const RouteGuard = ({ children, requiredRoles = [], redirectTo = '/login' }) => 
     );
   }
 
-  const atLogin = location.pathname === '/login';
-
-  // Si no está autenticado:
   if (!isAuthenticated) {
-    // Dejar ver el login sin redirigir (evita loop)
-    if (atLogin) return children;
-    return <Navigate to={redirectTo} replace state={{ from: location }} />;
+    return <Navigate to={redirectTo} replace />;
   }
 
-  // Ya autenticado y en /login → mandarlo a inicio (una sola vez)
-  if (isAuthenticated && atLogin) {
-    return <Navigate to="/" replace />;
-  }
-
-  // Revisión de roles (si aplica)
   if (requiredRoles.length > 0 && !hasAnyRole(requiredRoles)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
