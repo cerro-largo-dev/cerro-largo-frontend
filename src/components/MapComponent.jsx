@@ -201,7 +201,7 @@ function MapComponent({
             fillColor: finalColor,
             weight: 2,
             opacity: 0.9, // Borde con alta opacidad
-            color: 'finalColor', // Mismo color que el relleno
+            color: finalColor, // Mismo color que el relleno
             dashArray: '',
             fillOpacity: 0.6 // Relleno con menor opacidad
         };
@@ -384,9 +384,4 @@ function MapComponent({
 }
 
 export default MapComponent;
-
-
-
-export default MapComponent;
-
 
