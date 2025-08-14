@@ -1,277 +1,162 @@
-import { useState, useEffect } from 'react'
-import { BACKEND_URL } from '@/lib/api.js' // ← base del backend centralizada
+import smtplib
+import os
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+from datetime import datetime
+import logging
 
-const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
-  const [formData, setFormData] = useState({
-    description: '',
-    placeName: '',
-    latitude: null,
-    longitude: null,
-    photos: []
-  })
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false)
-  const [locationError, setLocationError] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Obtener geolocalización al abrir el modal
-  useEffect(() => {
-    if (isOpen) {
-      if (!formData.latitude || !formData.longitude) {
-        setLocationError('')
-        getLocation()
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]) // evitar re-ejecutar por cambios de onLocationChange
-
-  const getLocation = () => {
-    setIsLoadingLocation(true)
-    setLocationError('')
-
-    if (!navigator.geolocation) {
-      setLocationError('La geolocalización no está soportada en este navegador')
-      setIsLoadingLocation(false)
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude
-        const lng = position.coords.longitude
-
-        setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))
-        onLocationChange?.({ lat, lng })
-        setIsLoadingLocation(false)
-      },
-      () => {
-        // Fallback Cerro Largo
-        const fallbackLat = -32.3667
-        const fallbackLng = -54.1667
-        setFormData(prev => ({ ...prev, latitude: fallbackLat, longitude: fallbackLng }))
-        onLocationChange?.({ lat: fallbackLat, lng: fallbackLng })
-        setLocationError('Usando ubicación aproximada de Cerro Largo (GPS no disponible)')
-        setIsLoadingLocation(false)
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    )
-  }
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
-
-  const handlePhotoUpload = (e) => {
-    const files = Array.from(e.target.files || [])
-    if (files.length + formData.photos.length > 3) {
-      alert('Máximo 3 fotos permitidas')
-      return
-    }
-    setFormData(prev => ({ ...prev, photos: [...prev.photos, ...files] }))
-  }
-
-  const removePhoto = (index) => {
-    setFormData(prev => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }))
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!formData.description.trim()) {
-      alert('Por favor, ingresa una descripción')
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const formDataToSend = new FormData()
-      formDataToSend.append('descripcion', formData.description)
-      formDataToSend.append('nombre_lugar', formData.placeName || '')
-      if (formData.latitude != null) formDataToSend.append('latitud', String(formData.latitude))
-      if (formData.longitude != null) formDataToSend.append('longitud', String(formData.longitude))
-      formData.photos.forEach((photo) => formDataToSend.append('fotos', photo))
-
-      // ✅ usar BACKEND_URL sin barra final para evitar // en la URL
-      const res = await fetch(`${BACKEND_URL}/api/reportes`, {
-        method: 'POST',
-        body: formDataToSend, // no seteamos Content-Type para que el boundary lo maneje el navegador
-      })
-
-      if (!res.ok) {
-        let err = 'Error desconocido'
-        try { const j = await res.json(); err = j?.error || j?.message || err } catch {}
-        alert(`Error al enviar el reporte: ${err}`)
-        return
-      }
-
-      await res.json()
-      alert('Reporte enviado exitosamente')
-      handleClose()
-    } catch (error) {
-      console.error('Error de red:', error)
-      alert('Error de conexión. Verifica tu conexión a internet e inténtalo de nuevo.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const handleClose = () => {
-    setFormData({ description: '', placeName: '', latitude: null, longitude: null, photos: [] })
-    setLocationError('')
-    onLocationChange?.(null)
-    onClose?.()
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div className="absolute bottom-6 left-24 z-[1000] p-4">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
-        <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
-          <h3 className="text-lg font-semibold">Reportar Estado</h3>
-          <button onClick={handleClose} className="h-8 w-8 p-0 bg-transparent border-none cursor-pointer text-gray-500 hover:text-gray-700">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="space-y-4 p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Ubicación */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Ubicación
-              </label>
-              {isLoadingLocation ? (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                  Obteniendo ubicación...
+class EmailService:
+    def __init__(self):
+        # Configuración de Gmail SMTP
+        self.smtp_server = "smtp.gmail.com"
+        self.smtp_port = 587
+        self.email_usuario = os.environ.get('EMAIL_USER', 'cerrolargogobierno@gmail.com')
+        self.email_password = os.environ.get('EMAIL_PASSWORD', '')
+        self.email_destino = 'gobcerrolargo@gmail.com'
+        
+    def enviar_reporte_ciudadano(self, reporte_data, fotos_paths=None):
+        """
+        Envía un reporte ciudadano por correo electrónico
+        
+        Args:
+            reporte_data (dict): Datos del reporte
+            fotos_paths (list): Lista de rutas de archivos de fotos
+        """
+        try:
+            # Crear mensaje
+            msg = MIMEMultipart()
+            msg['From'] = self.email_usuario
+            msg['To'] = self.email_destino
+            msg['Subject'] = f"Nuevo Reporte Ciudadano - {reporte_data.get('nombre_lugar', 'Sin ubicación específica')}"
+            
+            # Crear cuerpo del mensaje
+            cuerpo = self._crear_cuerpo_email(reporte_data)
+            msg.attach(MIMEText(cuerpo, 'html', 'utf-8'))
+            
+            # Adjuntar fotos si existen
+            if fotos_paths:
+                for foto_path in fotos_paths:
+                    if os.path.exists(foto_path):
+                        self._adjuntar_archivo(msg, foto_path)
+            
+            # Enviar email
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            server.starttls()
+            
+            # Usar contraseña de aplicación si está disponible
+            if self.email_password:
+                server.login(self.email_usuario, self.email_password)
+                text = msg.as_string()
+                server.sendmail(self.email_usuario, self.email_destino, text)
+                server.quit()
+                
+                logging.info(f"Reporte enviado exitosamente a {self.email_destino}")
+                return True
+            else:
+                logging.warning("No se configuró contraseña de email. Reporte no enviado.")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error al enviar reporte por email: {str(e)}")
+            return False
+    
+    def _crear_cuerpo_email(self, reporte_data):
+        """Crea el cuerpo HTML del email"""
+        fecha_formateada = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
+        # Formatear coordenadas si existen
+        ubicacion_info = ""
+        if reporte_data.get('latitud') and reporte_data.get('longitud'):
+            lat = reporte_data['latitud']
+            lng = reporte_data['longitud']
+            ubicacion_info = f"""
+            <p><strong>📍 Coordenadas:</strong></p>
+            <ul>
+                <li>Latitud: {lat}</li>
+                <li>Longitud: {lng}</li>
+                <li><a href="https://www.google.com/maps?q={lat},{lng}" target="_blank">Ver en Google Maps</a></li>
+            </ul>
+            """
+        
+        nombre_lugar = reporte_data.get('nombre_lugar', 'No especificado')
+        descripcion = reporte_data.get('descripcion', 'Sin descripción')
+        
+        cuerpo = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .header {{ background-color: #2563eb; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 20px; }}
+                .info-box {{ background-color: #f8f9fa; border-left: 4px solid #2563eb; padding: 15px; margin: 10px 0; }}
+                .footer {{ background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #666; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1> Nuevo Reporte Ciudadano</h1>
+                <p>Sistema de Reportes - Cerro Largo</p>
+            </div>
+            
+            <div class="content">
+                <div class="info-box">
+                    <h3>📋 Información del Reporte</h3>
+                    <p><strong>📅 Fecha y Hora:</strong> {fecha_formateada}</p>
+                    <p><strong>📍 Lugar:</strong> {nombre_lugar}</p>
+                    <p><strong>📝 Descripción:</strong></p>
+                    <p style="background-color: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        {descripcion}
+                    </p>
                 </div>
-              ) : locationError ? (
-                <div className="text-sm text-red-600">
-                  {locationError}
-                  <button type="button" onClick={getLocation} className="p-0 h-auto ml-2 text-blue-600 underline bg-transparent border-none cursor-pointer">
-                    Reintentar
-                  </button>
+                
+                {ubicacion_info}
+                
+                <div class="info-box">
+                    <h3>📸 Fotos Adjuntas</h3>
+                    <p>Las fotos del reporte se encuentran adjuntas a este correo (si las hay).</p>
                 </div>
-              ) : formData.latitude && formData.longitude ? (
-                <div className="text-sm text-green-600">
-                  ✓ Ubicación: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                
+                <div class="info-box">
+                    <h3>⚡ Acciones Recomendadas</h3>
+                    <ul>
+                        <li>Revisar la descripción del problema reportado</li>
+                        <li>Verificar la ubicación en el mapa</li>
+                        <li>Evaluar la prioridad del reporte</li>
+                        <li>Asignar personal para inspección si es necesario</li>
+                    </ul>
                 </div>
-              ) : null}
             </div>
-
-            {/* Nombre del lugar */}
-            <div className="space-y-2">
-              <label htmlFor="placeName" className="text-sm font-medium">Nombre del lugar (opcional)</label>
-              <input
-                id="placeName"
-                name="placeName"
-                value={formData.placeName}
-                onChange={handleInputChange}
-                placeholder="Ej: Curva peligrosa en Ruta 8"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            
+            <div class="footer">
+                <p>Este es un mensaje automático del Sistema de Reportes Ciudadanos de Cerro Largo.</p>
+                <p>Para más información, contacte al administrador del sistema.</p>
             </div>
-
-            {/* Descripción */}
-            <div className="space-y-2">
-              <label htmlFor="description" className="text-sm font-medium">Descripción *</label>
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                placeholder="Describe el estado de la caminería o el problema que observas..."
-                rows={4}
-                maxLength={500}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <div className="text-xs text-gray-500 text-right">
-                {formData.description.length}/500 caracteres
-              </div>
-            </div>
-
-            {/* Fotos */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Fotos (máximo 3)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                  id="photo-upload"
-                />
-                <button
-                  type="button"
-                  onClick={() => document.getElementById('photo-upload').click()}
-                  disabled={formData.photos.length >= 3}
-                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  Subir fotos
-                </button>
-                <span className="text-sm text-gray-500">
-                  {formData.photos.length}/3
-                </span>
-              </div>
-
-              {formData.photos.length > 0 && (
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {formData.photos.map((photo, index) => (
-                    <div key={index} className="relative">
-                      <img src={URL.createObjectURL(photo)} alt={`Foto ${index + 1}`} className="w-full h-20 object-cover rounded border" />
-                      <button
-                        type="button"
-                        onClick={() => removePhoto(index)}
-                        className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-500 text-white border-none cursor-pointer hover:bg-red-600 flex items-center justify-center"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Acciones */}
-            <div className="flex gap-2 pt-4">
-              <button type="button" onClick={handleClose} className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50" disabled={isSubmitting}>
-                Cancelar
-              </button>
-              <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50" disabled={isSubmitting || !formData.description.trim()}>
-                {isSubmitting ? (
-                  <>
-                    <div className="inline-block animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
-                    Enviando...
-                  </>
-                ) : (
-                  'Enviar Reporte'
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default ReportModal
+        </body>
+        </html>
+        """
+        
+        return cuerpo
+    
+    def _adjuntar_archivo(self, msg, archivo_path):
+        """Adjunta un archivo al mensaje de email"""
+        try:
+            with open(archivo_path, "rb") as attachment:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attachment.read())
+            
+            encoders.encode_base64(part)
+            
+            filename = os.path.basename(archivo_path)
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename= {filename}',
+            )
+            
+            msg.attach(part)
+            
+        except Exception as e:
+            logging.error(f"Error al adjuntar archivo {archivo_path}: {str(e)}")
