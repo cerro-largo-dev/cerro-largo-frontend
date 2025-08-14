@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
 
 const AdminPanel = ({ onZoneStateChange, zoneStates, zones }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
