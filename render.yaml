@@ -1,7 +1,7 @@
 services:
   - type: static_site
     name: cerro-largo-frontend
-    buildCommand: npm install --legacy-peer-deps && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
       - key: NODE_VERSION
