@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
 import ReportButton from './components/Reportes/ReportButton';
@@ -10,7 +10,7 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(null);
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Exponer BACKEND_URL al window para componentes que lo usan
+  // Exponer BACKEND_URL al window para que lo usen otros componentes
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -35,20 +35,41 @@ export default function App() {
     return () => window.removeEventListener('popstate', compute);
   }, []);
 
-  // GEOLOCALIZACIÓN (pide permiso al montar)
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setUserLocation({ lat: -32.3667, lng: -54.1667 }); // Cerro Largo fallback
-      return;
+  // === GEOLOCALIZACIÓN ===
+  // 1) función reutilizable para pedir ubicación
+  const requestLocation = useCallback(() => {
+    if (!('geolocation' in navigator)) {
+      setUserLocation({ lat: -32.3667, lng: -54.1667 }); // Cerro Largo (fallback)
+      return false;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => setUserLocation({ lat: -32.3667, lng: -54.1667 }),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
     );
+    return true;
   }, []);
 
-  // Handlers que consumen Mapa/AdminPanel
+  // 2) intento al montar
+  useEffect(() => {
+    requestLocation();
+  }, [requestLocation]);
+
+  // 3) si no hay ubicación, reintenta en el primer gesto del usuario (iOS/Safari)
+  useEffect(() => {
+    if (userLocation) return;
+    const handler = () => requestLocation();
+    window.addEventListener('click', handler, { once: true });
+    window.addEventListener('touchend', handler, { once: true });
+    window.addEventListener('keydown', handler, { once: true });
+    return () => {
+      window.removeEventListener('click', handler);
+      window.removeEventListener('touchend', handler);
+      window.removeEventListener('keydown', handler);
+    };
+  }, [userLocation, requestLocation]);
+
+  // Handlers/Callbacks
   const handleZoneStatesLoad = (initialStates) => {
     if (initialStates && typeof initialStates === 'object') setZoneStates(initialStates);
   };
@@ -111,10 +132,9 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* Botón de reportes siempre visible (mismo lugar de antes) */}
-      <ReportButton onLocationChange={handleUserLocationChange} />
+      {/* Reintenta pedir ubicación cuando se abre el modal de reportes */}
+      <ReportButton onLocationChange={handleUserLocationChange} onEnsureLocation={requestLocation} />
 
-      {/* Panel solo en /admin */}
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
