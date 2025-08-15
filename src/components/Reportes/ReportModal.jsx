@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
+const ReportModal = ({ isOpen, onClose, onLocationChange, onEnsureLocation }) => {
   const [formData, setFormData] = useState({
     description: '',
     placeName: '',
@@ -11,62 +11,159 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [locationError, setLocationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastGeoErrorCode, setLastGeoErrorCode] = useState(null);
 
-  // Backend URL desde env/window, sin barra final
+  const watchIdRef = useRef(null);
+  const timerRef = useRef(null);
+
   const BACKEND_URL = (
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
-    (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+    (typeof import.meta !== 'undefined' && import.meta.env &&
+      (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
     'https://cerro-largo-backend.onrender.com'
   ).replace(/\/$/, '');
 
-  // Obtener geolocalización al abrir el modal (si no la tenemos)
   useEffect(() => {
     if (isOpen) {
+      setLocationError('');
       if (!formData.latitude || !formData.longitude) {
-        setLocationError('');
-        getLocation();
+        getLocation(); // primer intento normal
       }
+      // además, pedile al padre que reintente (gesto del usuario)
+      typeof onEnsureLocation === 'function' && onEnsureLocation();
     }
-    // NO limpiamos coords al cerrar para mantener marcador/estado visibles
-  }, [isOpen, onLocationChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
-  const getLocation = () => {
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null && navigator.geolocation?.clearWatch) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const setCoords = (lat, lng) => {
+    setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+    onLocationChange && onLocationChange({ lat, lng });
+  };
+
+  const useFallback = (msg) => {
+    setCoords(-32.3667, -54.1667);
+    setLocationError(msg || 'Usando ubicación aproximada de Cerro Largo (GPS no disponible)');
+  };
+
+  const tryOnce = (opts) =>
+    new Promise((resolve, reject) => {
+      if (!('geolocation' in navigator)) return reject(new Error('No geolocation'));
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (err) => reject(err),
+        opts
+      );
+    });
+
+  const tryWatch = (opts, ms = 8000) =>
+    new Promise((resolve, reject) => {
+      if (!('geolocation' in navigator) || !navigator.geolocation.watchPosition) {
+        return reject(new Error('No watch'));
+      }
+      let resolved = false;
+      const id = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (resolved) return;
+          resolved = true;
+          navigator.geolocation.clearWatch(id);
+          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => {
+          if (resolved) return;
+          resolved = true;
+          navigator.geolocation.clearWatch(id);
+          reject(err);
+        },
+        opts
+      );
+      setTimeout(() => {
+        if (resolved) return;
+        resolved = true;
+        navigator.geolocation.clearWatch(id);
+        reject(new Error('watch timeout'));
+      }, ms);
+    });
+
+  const getLocation = async (compat = false) => {
     setIsLoadingLocation(true);
     setLocationError('');
+    setLastGeoErrorCode(null);
 
-    if (!navigator.geolocation) {
-      setLocationError('La geolocalización no está soportada en este navegador');
+    if (!('geolocation' in navigator)) {
       setIsLoadingLocation(false);
-      return;
+      return useFallback('Geolocalización no soportada por el navegador');
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-
-        setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
-
-        // Propagar al padre (persistente)
-        if (onLocationChange) onLocationChange({ lat, lng });
-
-        setIsLoadingLocation(false);
-      },
-      (error) => {
-        console.error('Error de geolocalización:', error);
-
-        // Fallback Cerro Largo
-        const fallbackLat = -32.3667;
-        const fallbackLng = -54.1667;
-
-        setFormData(prev => ({ ...prev, latitude: fallbackLat, longitude: fallbackLng }));
-        if (onLocationChange) onLocationChange({ lat: fallbackLat, lng: fallbackLng });
-
-        setLocationError('Usando ubicación aproximada de Cerro Largo (GPS no disponible)');
-        setIsLoadingLocation(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+    try {
+      if (compat) {
+        // Modo compatibilidad: baja precisión + watch fallback
+        try {
+          const loc2 = await tryOnce({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+          setCoords(loc2.lat, loc2.lng);
+          setIsLoadingLocation(false);
+          return;
+        } catch (e2) {
+          setLastGeoErrorCode(e2 && e2.code);
+          try {
+            const loc3 = await tryWatch({ enableHighAccuracy: false, maximumAge: 300000 }, 10000);
+            setCoords(loc3.lat, loc3.lng);
+            setIsLoadingLocation(false);
+            return;
+          } catch {
+            useFallback();
+            setIsLoadingLocation(false);
+            return;
+          }
+        }
+      } else {
+        // Intento normal: alta precisión → baja precisión → watch
+        try {
+          const loc = await tryOnce({ enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
+          setCoords(loc.lat, loc.lng);
+          setIsLoadingLocation(false);
+          return;
+        } catch (e1) {
+          setLastGeoErrorCode(e1 && e1.code);
+          if (e1 && e1.code === 2) {
+            // POSITION_UNAVAILABLE → pruebo baja precisión
+            try {
+              const loc2 = await tryOnce({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+              setCoords(loc2.lat, loc2.lng);
+              setIsLoadingLocation(false);
+              return;
+            } catch (e2) {
+              setLastGeoErrorCode(e2 && e2.code);
+              const loc3 = await tryWatch({ enableHighAccuracy: false, maximumAge: 300000 }, 10000).catch(() => null);
+              if (loc3) {
+                setCoords(loc3.lat, loc3.lng);
+                setIsLoadingLocation(false);
+                return;
+              }
+              useFallback();
+              setIsLoadingLocation(false);
+              return;
+            }
+          } else {
+            // denied/timeout u otro
+            useFallback();
+            setIsLoadingLocation(false);
+            return;
+          }
+        }
+      }
+    } catch {
+      useFallback();
+      setIsLoadingLocation(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -75,7 +172,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
   };
 
   const handlePhotoUpload = (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
     if (files.length + formData.photos.length > 3) {
       alert('Máximo 3 fotos permitidas');
       return;
@@ -92,46 +189,34 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!formData.description.trim()) {
       alert('Por favor, ingresa una descripción');
       return;
     }
-
     setIsSubmitting(true);
-
     try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('descripcion', formData.description);
-      formDataToSend.append('nombre_lugar', formData.placeName || '');
+      const fd = new FormData();
+      fd.append('descripcion', formData.description);
+      fd.append('nombre_lugar', formData.placeName || '');
+      if (formData.latitude !== null) fd.append('latitud', String(formData.latitude));
+      if (formData.longitude !== null) fd.append('longitud', String(formData.longitude));
+      formData.photos.forEach((p) => fd.append('fotos', p));
 
-      if (formData.latitude !== null) formDataToSend.append('latitud', String(formData.latitude));
-      if (formData.longitude !== null) formDataToSend.append('longitud', String(formData.longitude));
-
-      formData.photos.forEach((photo) => {
-        formDataToSend.append('fotos', photo);
-      });
-
-      // Enviar al backend (sin barra doble, y listo para cookies si algún día las necesitás)
-      const response = await fetch(`${BACKEND_URL}/api/reportes`, {
+      const res = await fetch(`${BACKEND_URL}/api/reportes`, {
         method: 'POST',
-        body: formDataToSend,
-        credentials: 'include' // opcional; si el endpoint es público no es requerido
+        body: fd,
+        credentials: 'include'
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Reporte creado:', result);
+      if (res.ok) {
+        await res.json().catch(() => ({}));
         alert('Reporte enviado exitosamente');
         handleClose();
       } else {
-        const error = await response.json().catch(() => ({}));
-        console.error('Error del servidor:', error);
-        alert(`Error al enviar el reporte: ${error.error || 'Error desconocido'}`);
+        const err = await res.json().catch(() => ({}));
+        alert(`Error al enviar el reporte: ${err.error || 'Error desconocido'}`);
       }
-    } catch (error) {
-      console.error('Error de red:', error);
-      alert('Error de conexión. Verifica tu conexión a internet e inténtalo de nuevo.');
+    } catch {
+      alert('Error de conexión. Inténtalo de nuevo.');
     } finally {
       setIsSubmitting(false);
     }
@@ -146,25 +231,18 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       photos: []
     });
     setLocationError('');
-
-    // Limpiar ubicación en el padre al cerrar (si lo necesitás)
-    if (onLocationChange) onLocationChange(null);
-
-    if (onClose) onClose();
+    onLocationChange && onLocationChange(null);
+    onClose && onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    // FIX: usar fixed para ubicarlo junto al FAB (Reporte) a la misma altura
     <div className="fixed bottom-6 left-24 z-[1000] p-4">
       <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
         <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
           <h3 className="text-lg font-semibold">Reportar Estado</h3>
-          <button
-            onClick={handleClose}
-            className="h-8 w-8 p-0 bg-transparent border-none cursor-pointer text-gray-500 hover:text-gray-700"
-          >
+          <button onClick={handleClose} className="h-8 w-8 p-0 bg-transparent border-none cursor-pointer text-gray-500 hover:text-gray-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -182,6 +260,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
                 </svg>
                 Ubicación
               </label>
+
               {isLoadingLocation ? (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -190,13 +269,27 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
               ) : locationError ? (
                 <div className="text-sm text-red-600">
                   {locationError}
-                  <button
-                    type="button"
-                    onClick={getLocation}
-                    className="p-0 h-auto ml-2 text-blue-600 underline bg-transparent border-none cursor-pointer"
-                  >
-                    Reintentar
-                  </button>
+                  {lastGeoErrorCode === 2 && (
+                    <span className="block text-xs text-slate-600 mt-1">
+                      (No hay señal GPS/Wi-Fi útil. Probamos un modo de compatibilidad.)
+                    </span>
+                  )}
+                  <div className="mt-1 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => getLocation(true)} // compat
+                      className="p-0 h-auto text-blue-600 underline bg-transparent border-none cursor-pointer"
+                    >
+                      Reintentar (compatibilidad)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => getLocation(false)} // normal
+                      className="p-0 h-auto text-blue-600 underline bg-transparent border-none cursor-pointer"
+                    >
+                      Reintentar (normal)
+                    </button>
+                  </div>
                 </div>
               ) : formData.latitude && formData.longitude ? (
                 <div className="text-sm text-green-600">
@@ -205,7 +298,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
               ) : null}
             </div>
 
-            {/* Nombre del lugar (opcional) */}
+            {/* Nombre del lugar */}
             <div className="space-y-2">
               <label htmlFor="placeName" className="text-sm font-medium">Nombre del lugar (opcional)</label>
               <input
@@ -237,7 +330,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
               </div>
             </div>
 
-            {/* Carga de fotos */}
+            {/* Fotos */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,6 +343,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
                 <input
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   multiple
                   onChange={handlePhotoUpload}
                   className="hidden"
@@ -264,22 +358,16 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
-                  Subir fotos
+                  Usar cámara / subir
                 </button>
-                <span className="text-sm text-gray-500">
-                  {formData.photos.length}/3
-                </span>
+                <span className="text-sm text-gray-500">{formData.photos.length}/3</span>
               </div>
 
               {formData.photos.length > 0 && (
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   {formData.photos.map((photo, index) => (
                     <div key={index} className="relative">
-                      <img
-                        src={URL.createObjectURL(photo)}
-                        alt={`Foto ${index + 1}`}
-                        className="w-full h-20 object-cover rounded border"
-                      />
+                      <img src={URL.createObjectURL(photo)} alt={`Foto ${index + 1}`} className="w-full h-20 object-cover rounded border" />
                       <button
                         type="button"
                         onClick={() => removePhoto(index)}
