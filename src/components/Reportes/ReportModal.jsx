@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react';
 
 const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
   const [formData, setFormData] = useState({
@@ -7,168 +7,128 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
     latitude: null,
     longitude: null,
     photos: []
-  })
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false)
-  const [locationError, setLocationError] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  });
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Obtener geolocalización al abrir el modal
+  // Backend URL desde env/window, sin barra final
+  const BACKEND_URL = (
+    (typeof window !== 'undefined' && window.BACKEND_URL) ||
+    (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+    'https://cerro-largo-backend.onrender.com'
+  ).replace(/\/$/, '');
+
+  // Obtener geolocalización al abrir el modal (si no la tenemos)
   useEffect(() => {
     if (isOpen) {
-      // Solo obtener ubicación si no la tenemos ya
       if (!formData.latitude || !formData.longitude) {
         setLocationError('');
         getLocation();
       }
     }
-    // NO limpiar la ubicación cuando se cierra el modal para mantener el marcador visible
-  }, [isOpen, onLocationChange])
+    // no limpiamos coords al cerrar para mantener visibles
+  }, [isOpen, onLocationChange]); // eslint-disable-line
 
   const getLocation = () => {
-    setIsLoadingLocation(true)
-    setLocationError('')
+    setIsLoadingLocation(true);
+    setLocationError('');
 
     if (!navigator.geolocation) {
-      setLocationError('La geolocalización no está soportada en este navegador')
-      setIsLoadingLocation(false)
-      return
+      setLocationError('La geolocalización no está soportada en este navegador');
+      setIsLoadingLocation(false);
+      return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        
-        console.log('Geolocalización obtenida:', { lat, lng });
-        
-        setFormData(prev => ({
-          ...prev,
-          latitude: lat,
-          longitude: lng
-        }))
-        
-        // Enviar ubicación al padre (se mantiene persistente)
-        if (onLocationChange) {
-          console.log('ReportModal enviando ubicación al padre:', { lat, lng });
-          onLocationChange({ lat, lng });
-        }
-        
-        setIsLoadingLocation(false)
+
+        setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+        if (onLocationChange) onLocationChange({ lat, lng });
+
+        setIsLoadingLocation(false);
       },
       (error) => {
         console.error('Error de geolocalización:', error);
-        
-        // Para debug: usar coordenadas de Cerro Largo como fallback
+
+        // Fallback Cerro Largo
         const fallbackLat = -32.3667;
         const fallbackLng = -54.1667;
-        
-        console.log('Usando coordenadas de fallback:', { lat: fallbackLat, lng: fallbackLng });
-        
-        setFormData(prev => ({
-          ...prev,
-          latitude: fallbackLat,
-          longitude: fallbackLng
-        }))
-        
-        // Enviar ubicación de fallback al padre (se mantiene persistente)
-        if (onLocationChange) {
-          console.log('ReportModal enviando ubicación de fallback al padre:', { lat: fallbackLat, lng: fallbackLng });
-          onLocationChange({ lat: fallbackLat, lng: fallbackLng });
-        }
-        
-        let errorMessage = 'Usando ubicación aproximada de Cerro Largo (GPS no disponible)';
-        setLocationError(errorMessage);
-        
-        setIsLoadingLocation(false)
+
+        setFormData(prev => ({ ...prev, latitude: fallbackLat, longitude: fallbackLng }));
+        if (onLocationChange) onLocationChange({ lat: fallbackLat, lng: fallbackLng });
+
+        setLocationError('Usando ubicación aproximada de Cerro Largo (GPS no disponible)');
+        setIsLoadingLocation(false);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
-      }
-    )
-  }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
   const handlePhotoUpload = (e) => {
-    const files = Array.from(e.target.files)
+    const files = Array.from(e.target.files || []);
     if (files.length + formData.photos.length > 3) {
-      alert('Máximo 3 fotos permitidas')
-      return
+      alert('Máximo 3 fotos permitidas');
+      return;
     }
-
-    setFormData(prev => ({
-      ...prev,
-      photos: [...prev.photos, ...files]
-    }))
-  }
+    setFormData(prev => ({ ...prev, photos: [...prev.photos, ...files] }));
+  };
 
   const removePhoto = (index) => {
     setFormData(prev => ({
       ...prev,
       photos: prev.photos.filter((_, i) => i !== index)
-    }))
-  }
+    }));
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    
+    e.preventDefault();
+
     if (!formData.description.trim()) {
-      alert('Por favor, ingresa una descripción')
-      return
+      alert('Por favor, ingresa una descripción');
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     try {
-      // Crear FormData para enviar archivos y datos
-      const formDataToSend = new FormData()
-      formDataToSend.append('descripcion', formData.description)
-      formDataToSend.append('nombre_lugar', formData.placeName || '')
-      
-      if (formData.latitude !== null) {
-        formDataToSend.append('latitud', formData.latitude.toString())
-      }
-      if (formData.longitude !== null) {
-        formDataToSend.append('longitud', formData.longitude.toString())
-      }
-      
-      // Agregar fotos
-      formData.photos.forEach((photo, index) => {
-        formDataToSend.append('fotos', photo)
-      })
+      const formDataToSend = new FormData();
+      formDataToSend.append('descripcion', formData.description);
+      formDataToSend.append('nombre_lugar', formData.placeName || '');
+      if (formData.latitude !== null) formDataToSend.append('latitud', String(formData.latitude));
+      if (formData.longitude !== null) formDataToSend.append('longitud', String(formData.longitude));
+      formData.photos.forEach((photo) => formDataToSend.append('fotos', photo));
 
-// Enviar al backend
-const backendUrl = 'https://cerro-largo-backend.onrender.com/';
-const response = await fetch(`${backendUrl}/api/reportes`, {
-  method: 'POST',
-  body: formDataToSend
-});
+      const response = await fetch(`${BACKEND_URL}/api/reportes`, {
+        method: 'POST',
+        body: formDataToSend,
+        credentials: 'include'
+      });
 
       if (response.ok) {
-        const result = await response.json()
-        console.log('Reporte creado:', result)
-        alert('Reporte enviado exitosamente')
-        handleClose()
+        const result = await response.json().catch(() => ({}));
+        console.log('Reporte creado:', result);
+        alert('Reporte enviado exitosamente');
+        handleClose();
       } else {
-        const error = await response.json()
-        console.error('Error del servidor:', error)
-        alert(`Error al enviar el reporte: ${error.error || 'Error desconocido'}`)
+        const error = await response.json().catch(() => ({}));
+        console.error('Error del servidor:', error);
+        alert(`Error al enviar el reporte: ${error.error || 'Error desconocido'}`);
       }
     } catch (error) {
-      console.error('Error de red:', error)
-      alert('Error de conexión. Verifica tu conexión a internet e inténtalo de nuevo.')
+      console.error('Error de red:', error);
+      alert('Error de conexión. Verifica tu conexión a internet e inténtalo de nuevo.');
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleClose = () => {
     setFormData({
@@ -177,24 +137,17 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
       latitude: null,
       longitude: null,
       photos: []
-    })
-    setLocationError('')
-    
-    // Limpiar ubicación en el padre al cerrar el modal
-    if (onLocationChange) {
-      onLocationChange(null);
-    }
-    
-    // Cerrar el modal
-    if (onClose) {
-      onClose();
-    }
-  }
+    });
+    setLocationError('');
+    if (onLocationChange) onLocationChange(null);
+    if (onClose) onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
-    <div className="absolute bottom-6 left-24 z-[1000] p-4">
+    // fixed para alinear con el FAB a la misma altura (left-24 junto a left-6 del botón)
+    <div className="fixed bottom-6 left-24 z-[1000] p-4">
       <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
         <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
           <h3 className="text-lg font-semibold">Reportar Estado</h3>
@@ -207,7 +160,7 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
             </svg>
           </button>
         </div>
-        
+
         <div className="space-y-4 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Geolocalización */}
@@ -237,7 +190,7 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
                 </div>
               ) : formData.latitude && formData.longitude ? (
                 <div className="text-sm text-green-600">
-                  ✓ Ubicación obtenida: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                  ✓ Ubicación: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                 </div>
               ) : null}
             </div>
@@ -287,6 +240,7 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
                 <input
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   multiple
                   onChange={handlePhotoUpload}
                   className="hidden"
@@ -301,14 +255,13 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
-                  Subir fotos
+                  Usar cámara / subir
                 </button>
                 <span className="text-sm text-gray-500">
                   {formData.photos.length}/3
                 </span>
               </div>
-              
-              {/* Vista previa de fotos */}
+
               {formData.photos.length > 0 && (
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   {formData.photos.map((photo, index) => (
@@ -333,7 +286,7 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
               )}
             </div>
 
-            {/* Botones de acción */}
+            {/* Botones */}
             <div className="flex gap-2 pt-4">
               <button
                 type="button"
@@ -362,8 +315,7 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-
-export default ReportModal
+export default ReportModal;
