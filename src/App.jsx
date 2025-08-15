@@ -10,14 +10,14 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(null);
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Exponer BACKEND_URL
+  // Exponer BACKEND_URL (tu env: VITE_REACT_APP_BACKEND_URL)
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
         (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
       (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) ||
       'https://cerro-largo-backend.onrender.com';
-    if (typeof window !== 'undefined') window.BACKEND_URL = be;
+    if (typeof window !== 'undefined') window.BACKEND_URL = String(be).replace(/\/$/, '');
   }, []);
 
   // Mostrar AdminPanel solo en /admin
@@ -31,112 +31,100 @@ export default function App() {
     return () => window.removeEventListener('popstate', compute);
   }, []);
 
-  // ---- GEO ROBUSTA ----
+  // -------- GEO “DES-EMPAQUETADA” --------
   const FALLBACK = { lat: -32.3667, lng: -54.1667 }; // Cerro Largo
 
-  const tryOnce = (opts) =>
-    new Promise((resolve, reject) => {
-      if (!('geolocation' in navigator)) return reject(new Error('No geolocation'));
+  const gpOnce = (opts) =>
+    new Promise((res, rej) => {
+      if (!('geolocation' in navigator)) return rej(new Error('no-geolocation'));
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        (err) => reject(err),
+        (p) => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        (e) => rej(e),
         opts
       );
     });
 
-  const tryWatch = (opts, ms = 8000) =>
-    new Promise((resolve, reject) => {
-      if (!('geolocation' in navigator) || !navigator.geolocation.watchPosition) {
-        return reject(new Error('No watch'));
-      }
-      let resolved = false;
+  const gpWatch = (opts, ms = 8000) =>
+    new Promise((res, rej) => {
+      if (!('geolocation' in navigator) || !navigator.geolocation.watchPosition) return rej(new Error('no-watch'));
+      let done = false;
       const id = navigator.geolocation.watchPosition(
-        (pos) => {
-          if (resolved) return;
-          resolved = true;
+        (p) => {
+          if (done) return;
+          done = true;
           navigator.geolocation.clearWatch(id);
-          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          res({ lat: p.coords.latitude, lng: p.coords.longitude });
         },
-        (err) => {
-          if (resolved) return;
-          resolved = true;
+        (e) => {
+          if (done) return;
+          done = true;
           navigator.geolocation.clearWatch(id);
-          reject(err);
+          rej(e);
         },
         opts
       );
       setTimeout(() => {
-        if (resolved) return;
-        resolved = true;
+        if (done) return;
+        done = true;
         navigator.geolocation.clearWatch(id);
-        reject(new Error('watch timeout'));
+        rej(new Error('watch-timeout'));
       }, ms);
     });
 
   const resolveLocation = useCallback(async () => {
     // 1) Alta precisión
     try {
-      const loc = await tryOnce({ enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
-      setUserLocation(loc);
-      return true;
+      const l1 = await gpOnce({ enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
+      setUserLocation(l1);
+      return;
     } catch (e1) {
-      // 2) Baja precisión si POSITION_UNAVAILABLE
-      if (e1 && e1.code === 2) {
+      // 2) Baja precisión si POSITION_UNAVAILABLE (code 2) o cualquier fallo
+      try {
+        const l2 = await gpOnce({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+        setUserLocation(l2);
+        return;
+      } catch (e2) {
+        // 3) Último intento: watchPosition (a veces “despierta” proveedores)
         try {
-          const loc2 = await tryOnce({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
-          setUserLocation(loc2);
-          return true;
-        } catch (e2) {
-          // 3) watchPosition como último intento
-          try {
-            const loc3 = await tryWatch({ enableHighAccuracy: false, maximumAge: 300000 }, 10000);
-            setUserLocation(loc3);
-            return true;
-          } catch {
-            setUserLocation(FALLBACK);
-            return false;
-          }
+          const l3 = await gpWatch({ enableHighAccuracy: false, maximumAge: 300000 }, 10000);
+          setUserLocation(l3);
+          return;
+        } catch (_) {
+          // 4) Fallback
+          setUserLocation(FALLBACK);
+          return;
         }
-      } else {
-        // Denied u otro error
-        setUserLocation(FALLBACK);
-        return false;
       }
     }
   }, []);
 
-  // Intento al montar
+  // Pídelo al montar (sin esperar gestos)
   useEffect(() => {
     resolveLocation();
   }, [resolveLocation]);
+  // -------- FIN GEO --------
 
-  // Reintento en el primer gesto de usuario (iOS/Safari, Chrome agresivo)
-  useEffect(() => {
-    if (userLocation) return;
-    const handler = () => resolveLocation();
-    window.addEventListener('click', handler, { once: true });
-    window.addEventListener('touchend', handler, { once: true });
-    return () => {
-      window.removeEventListener('click', handler);
-      window.removeEventListener('touchend', handler);
-    };
-  }, [userLocation, resolveLocation]);
-
-  // ---- Callbacks existentes ----
+  // Callbacks existentes
   const handleZoneStatesLoad = (initialStates) => {
     if (initialStates && typeof initialStates === 'object') setZoneStates(initialStates);
   };
   const handleZonesLoad = (zonesList) => { if (Array.isArray(zonesList)) setZones(zonesList); };
+
   const handleZoneStateChange = (zoneName, newStateEn) => {
+    // Refresco inmediato del mapa
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
+
   const handleBulkZoneStatesUpdate = (updatesMap) => {
-    if (updatesMap && typeof updatesMap === 'object') setZoneStates((prev) => ({ ...prev, ...updatesMap }));
+    if (updatesMap && typeof updatesMap === 'object') {
+      setZoneStates((prev) => ({ ...prev, ...updatesMap }));
+    }
   };
+
   const handleRefreshZoneStates = async () => {
     try {
       const be = (typeof window !== 'undefined' && window.BACKEND_URL) || 'https://cerro-largo-backend.onrender.com';
-      const url = be.replace(/\/$/, '') + '/api/admin/zones/states';
+      const url = String(be).replace(/\/$/, '') + '/api/admin/zones/states';
       const res = await fetch(url, { credentials: 'include' });
       const ct = res.headers.get('content-type') || '';
       const txt = await res.text();
@@ -156,6 +144,7 @@ export default function App() {
       console.warn('No se pudo refrescar estados:', e.message);
     }
   };
+
   const handleUserLocationChange = (loc) => { if (loc) setUserLocation(loc); };
 
   return (
@@ -168,8 +157,9 @@ export default function App() {
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
       />
-      {/* Reintenta al abrir el modal de reportes (gesto del usuario) */}
-      <ReportButton onLocationChange={handleUserLocationChange} onEnsureLocation={resolveLocation} />
+
+      <ReportButton onLocationChange={handleUserLocationChange} />
+
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
