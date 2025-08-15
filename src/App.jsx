@@ -11,8 +11,7 @@ function App() {
   // en App.jsx (una vez)
 const be = import.meta.env.VITE_REACT_APP_BACKEND_URL;
 if (typeof window !== 'undefined') window.BACKEND_URL = be;
-
-  
+ 
 
   // ← NUEVO: exponer BACKEND_URL desde tu env
   useEffect(() => {
@@ -87,10 +86,11 @@ if (typeof window !== 'undefined') window.BACKEND_URL = be;
         userLocation={userLocation}
       />
       <ReportButton onLocationChange={handleUserLocationChange} />
-      <AdminPanel
-        onRefreshZoneStates={handleRefreshZoneStates}
-        onBulkZoneStatesUpdate={handleBulkZoneStatesUpdate}
-      />
+       <AdminPanel
+  onRefreshZoneStates={handleRefreshZoneStates}
+  onBulkZoneStatesUpdate={handleBulkZoneStatesUpdate}
+  onZoneStateChange={handleZoneStateChange}   // ← NUEVO
+/>
     </div>
   );
 }
