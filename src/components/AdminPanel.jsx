@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
 /**
- * AdminPanel_3 integrado con backend y login del AdminPanel4.
- * - Usa BACKEND_URL para todas las llamadas (login, zonas, update-state, logout, reporte).
- * - Carga de zonas desde `${BACKEND_URL}/api/admin/zones` al autenticar.
- * - Update state a `${BACKEND_URL}/api/admin/update-state` (compatibilidad con AdminPanel4).
- * - Descarga de reporte desde `${BACKEND_URL}/api/report/generate-pdf`.
- * - Soporta estados "verde/amarillo/rojo" y también "green/yellow/red" de forma transparente.
- * - Si se pasan props zones/zoneStates, las usa como iniciales; luego sincroniza con backend.
+ * AdminPanel integrado con backend; se agrega soporte a roles (admin/editor) y allowed_zones.
+ * Cambios mínimos:
+ *  - check-auth ahora guarda role y allowed_zones.
+ *  - loadZones filtra zonas si rol=editor.
+ *  - handleUpdateZoneState bloquea si la zona no está permitida.
+ *  - Sin reestructurar el resto (descarga de reporte, etc.).
  */
 const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones: zonesProp = [] }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -19,7 +18,10 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
   const [zones, setZones] = useState(zonesProp);
   const [zoneStates, setZoneStates] = useState(zoneStatesProp);
 
-  // Permite sobreescribir por env o window. Fallback al Render del proyecto
+  // NUEVO: rol y zonas permitidas
+  const [role, setRole] = useState(null);            // 'admin' | 'editor'
+  const [allowedZones, setAllowedZones] = useState('*'); // '*' | [] | ['AREVALO', ...]
+
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
     (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
@@ -47,7 +49,7 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-    // Normalizadores de estado (aceptan string o {state})
+  // Normalizadores de estado (aceptan string o {state})
   const normalizeToEs = (state) => {
     const raw = typeof state === 'string' ? state : (state && state.state);
     const s = String(raw || '').toLowerCase();
@@ -90,25 +92,24 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
     }
   };
 
+  // Canonizador JS (mayúsculas, sin acentos)
+  const canon = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().trim();
+
   const checkAuthentication = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/check-auth`, {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json().catch(() => ({}));
-        if (data && data.authenticated === true) {
-          setIsAuthenticated(true);
-          await loadZones();
-        }
+      const data = await fetchJsonSafe(`${BACKEND_URL}/api/admin/check-auth`, { credentials: 'include' });
+      if (data && data.authenticated === true) {
+        setIsAuthenticated(true);
+        setRole(data.role || 'admin');
+        setAllowedZones(data.allowed_zones ?? (data.role === 'admin' ? '*' : []));
+        await loadZones(data.allowed_zones);
       }
     } catch (error) {
-      // Silencioso
       console.error('Error verificando autenticación:', error);
     }
   };
 
-  const loadZones = async () => {
+  const loadZones = async (allowed = allowedZones) => {
     const candidates = [
       `${BACKEND_URL}/api/admin/zones/states`,
       `${BACKEND_URL}/api/admin/zones`,
@@ -143,13 +144,22 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
           if (looksLikeMap && !('zones' in data)) {
             statesMap = data;
             zonesArr = keys;
-          }}
+          }
+        }
+
+        // FILTRO por rol editor
+        if (allowed && allowed !== '*' && Array.isArray(allowed) && allowed.length) {
+          const setAllowed = new Set(allowed.map(canon));
+          zonesArr = (zonesArr || []).filter((n) => setAllowed.has(canon(typeof n === 'string' ? n : (n && (n.name || n.zone)) || '')));
+        }
+
         setZones(Array.isArray(zonesArr) ? zonesArr : []);
 
         const mapping = {};
         (zonesArr || []).forEach((z) => {
           if (typeof z === 'string') {
-            mapping[z] = mapping[z] || 'verde';
+            const st = statesMap && statesMap[z] ? statesMap[z] : undefined;
+            mapping[z] = normalizeToEs(st);
           } else if (z && (z.name || z.zone)) {
             const name = z.name || z.zone;
             mapping[name] = normalizeToEs(z.state);
@@ -157,7 +167,9 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
         });
 
         Object.entries(statesMap).forEach(([name, st]) => {
-          mapping[name] = normalizeToEs(st);
+          if (!allowed || allowed === '*' || (Array.isArray(allowed) && allowed.map(canon).includes(canon(name)))) {
+            mapping[name] = normalizeToEs(st);
+          }
         });
 
         setZoneStates((prev) => ({ ...prev, ...mapping }));
@@ -185,10 +197,13 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
       });
 
       if (response.ok) {
+        const d = await response.json().catch(() => ({}));
         setIsAuthenticated(true);
         setPassword('');
-        await loadZones();
-        alert('Autenticación exitosa');
+        setRole(d.role || 'admin');
+        setAllowedZones(d.allowed_zones ?? (d.role === 'admin' ? '*' : []));
+        await loadZones(d.allowed_zones);
+        alert(d.message || 'Autenticación exitosa');
       } else {
         let msg = 'Contraseña incorrecta';
         try {
@@ -213,6 +228,8 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
       });
       setIsAuthenticated(false);
       setIsVisible(false);
+      setRole(null);
+      setAllowedZones('*');
     } catch (error) {
       console.error('Error en logout:', error);
     }
@@ -222,6 +239,15 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
     if (!selectedZone || !selectedState) {
       alert('Selecciona una zona y un estado');
       return;
+    }
+
+    // Bloqueo en UI si no está autorizado (rol editor)
+    if (allowedZones !== '*' && Array.isArray(allowedZones) && allowedZones.length) {
+      const ok = allowedZones.map(canon).includes(canon(selectedZone));
+      if (!ok) {
+        alert('No estás autorizado para esta zona');
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -308,7 +334,7 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
 
         {isVisible && (
           <div className="admin-content">
-            <h4>Acceso Administrador</h4>
+            <h4>Acceso Administrador/Editor</h4>
             <form onSubmit={handleLogin}>
               <input
                 type="password"
@@ -330,7 +356,7 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
   return (
     <div className={`admin-panel authenticated ${isVisible ? 'visible' : ''}`}>
       <button className="admin-toggle" onClick={() => setIsVisible(!isVisible)}>
-        {isVisible ? '▼' : '▲'} Panel Admin
+        {isVisible ? '▼' : '▲'} Panel {role === 'editor' ? 'Editor' : 'Admin'}
       </button>
 
       {isVisible && (
@@ -349,6 +375,10 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
                 <option value="">Seleccionar zona...</option>
                 {(zones && zones.length > 0 ? zones : zonesProp).map((z) => {
                   const name = zoneNameOf(z);
+                  // Filtrado UI si es editor
+                  if (allowedZones !== '*' && Array.isArray(allowedZones) && allowedZones.length) {
+                    if (!allowedZones.map(canon).includes(canon(name))) return null;
+                  }
                   return (
                     <option key={name} value={name}>
                       {name}
@@ -381,14 +411,19 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
           <div className="current-states">
             <h5>Estados Actuales:</h5>
             <div className="states-list">
-              {Object.entries(zoneStates).map(([zone, state]) => (
-                <div key={zone} className="state-item">
-                  <span className="zone-name">{zone}</span>
-                  <span className="state-indicator" style={{ color: getStateColor(state) }}>
-                    {getStateLabel(state)}
-                  </span>
-                </div>
-              ))}
+              {Object.entries(zoneStates).map(([zone, state]) => {
+                if (allowedZones !== '*' && Array.isArray(allowedZones) && allowedZones.length) {
+                  if (!allowedZones.map(canon).includes(canon(zone))) return null;
+                }
+                return (
+                  <div key={zone} className="state-item">
+                    <span className="zone-name">{zone}</span>
+                    <span className="state-indicator" style={{ color: getStateColor(state) }}>
+                      {getStateLabel(state)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
