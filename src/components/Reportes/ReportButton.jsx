@@ -7,7 +7,6 @@ export default function ReportButton({ onLocationChange, onEnsureLocation }) {
   const handleToggleModal = () => {
     setIsModalOpen((prev) => {
       const next = !prev;
-      // Al abrir, reintenta pedir ubicación (iOS/Safari exige gesto del usuario)
       if (next && typeof onEnsureLocation === 'function') onEnsureLocation();
       return next;
     });
@@ -16,7 +15,7 @@ export default function ReportButton({ onLocationChange, onEnsureLocation }) {
   return (
     <>
       {/* Botón flotante */}
-      <div className="fixed bottom-6 left-6 z-[999]">
+      <div className="fixed bottom-6 left-6 z-[999] report-fab">
         <button
           onClick={handleToggleModal}
           className="h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-none cursor-pointer"
