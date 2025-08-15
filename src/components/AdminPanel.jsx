@@ -22,7 +22,11 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
   const [role, setRole] = useState(null);            // 'admin' | 'editor'
   const [allowedZones, setAllowedZones] = useState('*'); // '*' | [] | ['AREVALO', ...]
 
-  $1
+  const BACKEND_URL =
+    (typeof window !== 'undefined' && window.BACKEND_URL) ||
+    (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+    (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
+    'https://cerro-largo-backend.onrender.com';
 
   // Orden fijo de zonas/municipios solicitado
   const DESIRED_ZONE_ORDER = [
