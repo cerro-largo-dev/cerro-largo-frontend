@@ -311,7 +311,7 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
   const handleDownloadReport = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/report/generate-pdf`, {
+      const response = await fetch(`${BACKEND_URL}/api/report/download`, {
         method: 'GET',
         credentials: 'include',
       });
