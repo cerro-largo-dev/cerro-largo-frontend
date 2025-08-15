@@ -1,12 +1,17 @@
-import { useState } from 'react'
-import ReportModal from './ReportModal.jsx'
+import { useState } from 'react';
+import ReportModal from './ReportModal.jsx';
 
-const ReportButton = ({ onLocationChange }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false)
+export default function ReportButton({ onLocationChange, onEnsureLocation }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleToggleModal = () => {
-    setIsModalOpen(prev => !prev)
-  }
+    setIsModalOpen((prev) => {
+      const next = !prev;
+      // Al abrir, reintenta pedir ubicación (iOS/Safari exige gesto del usuario)
+      if (next && typeof onEnsureLocation === 'function') onEnsureLocation();
+      return next;
+    });
+  };
 
   return (
     <>
@@ -29,15 +34,11 @@ const ReportButton = ({ onLocationChange }) => {
       </div>
 
       {/* Modal del formulario */}
-      <ReportModal 
-        isOpen={isModalOpen} 
+      <ReportModal
+        isOpen={isModalOpen}
         onClose={handleToggleModal}
         onLocationChange={onLocationChange}
       />
     </>
-  )
+  );
 }
-
-export default ReportButton
-
-
