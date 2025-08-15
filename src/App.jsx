@@ -8,6 +8,11 @@ function App() {
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
+  // en App.jsx (una vez)
+const be = import.meta.env.VITE_REACT_APP_BACKEND_URL;
+if (typeof window !== 'undefined') window.BACKEND_URL = be;
+
+  
 
   // ← NUEVO: exponer BACKEND_URL desde tu env
   useEffect(() => {
