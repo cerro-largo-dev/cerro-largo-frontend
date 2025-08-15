@@ -273,13 +273,24 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
       });
 
       if (response.ok) {
-        setZoneStates((prev) => ({ ...prev, [selectedZone]: normalizeToEn(selectedState) }));
+        const enState = normalizeToEn(selectedState);
+        // 1) Actualiza estado local del panel (vista lateral)
+        setZoneStates((prev) => ({ ...prev, [selectedZone]: enState }));
+        // 2) Notifica al resto de la app (callback si está provisto)
         if (typeof onZoneStateChange === 'function') {
-          onZoneStateChange(selectedZone, normalizeToEn(selectedState));
+          try { onZoneStateChange(selectedZone, enState); } catch (_) {}
         }
+        // 3) Notificación global opcional (sin tocar App): CustomEvent
+        try {
+          window.dispatchEvent(new CustomEvent('zoneStateUpdated', {
+            detail: { zone_name: selectedZone, state: enState }
+          }));
+        } catch (_) {}
+
         alert('Estado actualizado correctamente');
         setSelectedZone('');
         setSelectedState('verde');
+        // Refresco suave (opcional) para sincronizar si hay otros clientes
         await loadZones();
       } else {
         let msg = 'Error al actualizar estado';
