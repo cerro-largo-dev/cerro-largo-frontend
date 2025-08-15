@@ -1,217 +1,366 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
- * AdminPanel (requiere contraseña salvo sesión válida).
- * Endpoints:
- *  - POST /api/admin/login              body: { password }   (cookie)
- *  - GET  /api/admin/check-auth         -> { authenticated:true } (si existe)
- *  - GET  /api/admin/zones/states       -> { success, states:{ [zone]: {state,...} } }
- *  - POST /api/admin/zones/update-state body: { zone_name, state } // 'green'|'yellow'|'red'
+ * AdminPanel_3 integrado con backend y login del AdminPanel4.
+ * - Usa BACKEND_URL para todas las llamadas (login, zonas, update-state, logout, reporte).
+ * - Carga de zonas desde `${BACKEND_URL}/api/admin/zones` al autenticar.
+ * - Update state a `${BACKEND_URL}/api/admin/update-state` (compatibilidad con AdminPanel4).
+ * - Descarga de reporte desde `${BACKEND_URL}/api/report/generate-pdf`.
+ * - Soporta estados "verde/amarillo/rojo" y también "green/yellow/red" de forma transparente.
+ * - Si se pasan props zones/zoneStates, las usa como iniciales; luego sincroniza con backend.
  */
-export default function AdminPanel({ onRefreshZoneStates, onBulkZoneStatesUpdate }) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  const [isAuthed, setIsAuthed] = useState(false);
+const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones: zonesProp = [] }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-
-  const [zones, setZones] = useState([]);            // ['Arévalo', ...]
-  const [zoneStates, setZoneStates] = useState({});  // { 'Arévalo': 'green'|'yellow'|'red' }
-
+  const [isVisible, setIsVisible] = useState(false);
   const [selectedZone, setSelectedZone] = useState('');
   const [selectedState, setSelectedState] = useState('verde');
+  const [isLoading, setIsLoading] = useState(false);
+  const [zones, setZones] = useState(zonesProp);
+  const [zoneStates, setZoneStates] = useState(zoneStatesProp);
 
+  // Permite sobreescribir por env o window. Fallback al Render del proyecto
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
     (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
-    (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL)) ||
+    (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
     'https://cerro-largo-backend.onrender.com';
 
-  const API = (p) => `${String(BACKEND_URL).replace(/\/$/, '')}${p}`;
-
-  const normalizeEs = (s) => {
-    if (!s) return 'sin-estado';
-    const v = String(s).toLowerCase();
-    const map = { green:'verde', yellow:'amarillo', red:'rojo', verde:'verde', amarillo:'amarillo', rojo:'rojo' };
-    return map[v] || 'sin-estado';
-  };
-  const normalizeEn = (s) => {
-    if (!s) return 'red';
-    const v = String(s).toLowerCase();
-    const map = { verde:'green', amarillo:'yellow', rojo:'red', green:'green', yellow:'yellow', red:'red' };
-    return map[v] || 'red';
-  };
-
-  const stateLabelEs = (s) => {
-    const v = normalizeEs(s);
-    if (v === 'verde') return '🟩 Habilitado';
-    if (v === 'amarillo') return '🟨 Alerta';
-    if (v === 'rojo') return '🟥 Suspendido';
-    return 'Sin estado';
-  };
-  const stateColor = (s) => {
-    const v = normalizeEs(s);
-    if (v === 'verde') return '#22c55e';
-    if (v === 'amarillo') return '#eab308';
-    if (v === 'rojo') return '#ef4444';
-    return '#6b7280';
-  };
-
-  const fetchJsonStrict = async (url, options = {}) => {
+  // Helper: intenta parsear JSON; si viene HTML (<!doctype ...>) lanza error con snippet legible.
+  const fetchJsonSafe = async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
-    const body = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} @ ${url} :: ${body.slice(0,200)}`);
-    if (!ct.includes('application/json')) throw new Error(`No-JSON @ ${url} :: ${body.slice(0,200)}`);
-    try { return JSON.parse(body); } catch (e) { throw new Error(`JSON inválido @ ${url} :: ${e.message}`); }
+    if (!res.ok) {
+      let body = '';
+      try { body = await res.text(); } catch (_) {}
+      throw new Error(`HTTP ${res.status} ${res.statusText} en ${url} — ${body.slice(0, 200)}`);
+    }
+    if (ct.includes('application/json')) {
+      return res.json();
+    }
+    const text = await res.text();
+    throw new Error(`Respuesta no JSON desde ${url}: ${text.slice(0, 200)}`);
   };
 
-  // Solo consideramos autenticado si check-auth lo confirma; luego cargamos estados
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const d = await fetchJsonStrict(API('/api/admin/check-auth')).catch(() => null);
-        const ok = !!(d && (d.authenticated === true || d.success === true));
-        if (mounted) setIsAuthed(ok);
-        if (ok) await refreshStates();
-      } catch { /* ignore */ }
-    })();
-    return () => { mounted = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [BACKEND_URL]);
+    checkAuthentication();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const applyStatesPayload = (statesObj) => {
-    const names = [];
-    const map = {};
-    for (const [zoneName, info] of Object.entries(statesObj || {})) {
-      map[zoneName] = normalizeEn(info?.state);
-      names.push(zoneName);
-    }
-    names.sort((a,b)=>a.localeCompare(b));
-    setZones(names);
-    setZoneStates(map);
+    // Normalizadores de estado (aceptan string o {state})
+  const normalizeToEs = (state) => {
+    const raw = typeof state === 'string' ? state : (state && state.state);
+    const s = String(raw || '').toLowerCase();
+    const map = { green:'verde', yellow:'amarillo', red:'rojo', verde:'verde', amarillo:'amarillo', rojo:'rojo' };
+    return map[s] || 'sin-estado';
   };
 
-  const refreshStates = async () => {
-    setLoading(true); setMsg('');
-    try {
-      const data = await fetchJsonStrict(API('/api/admin/zones/states'));
-      if (!data?.success) throw new Error(data?.message || 'Error al obtener estados');
-      applyStatesPayload(data.states || {});
-      setMsg('Estados actualizados.');
-    } catch (e) {
-      setMsg(e.message);
-      throw e;
-    } finally {
-      setLoading(false);
+  const normalizeToEn = (state) => {
+    const raw = typeof state === 'string' ? state : (state && state.state);
+    const s = String(raw || '').toLowerCase();
+    const map = { verde:'green', amarillo:'yellow', rojo:'red', green:'green', yellow:'yellow', red:'red' };
+    return map[s] || 'red';
+  };
+
+  const getStateColor = (state) => {
+    const s = normalizeToEs(state);
+    switch (s) {
+      case 'verde':
+        return '#22c55e';
+      case 'amarillo':
+        return '#eab308';
+      case 'rojo':
+        return '#ef4444';
+      default:
+        return '#6b7280';
     }
+  };
+
+  const getStateLabel = (state) => {
+    const s = normalizeToEs(state);
+    switch (s) {
+      case 'verde':
+        return '🟩 Habilitado';
+      case 'amarillo':
+        return '🟨 Alerta';
+      case 'rojo':
+        return '🟥 Suspendido';
+      default:
+        return 'Sin estado';
+    }
+  };
+
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/check-auth`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        if (data && data.authenticated === true) {
+          setIsAuthenticated(true);
+          await loadZones();
+        }
+      }
+    } catch (error) {
+      // Silencioso
+      console.error('Error verificando autenticación:', error);
+    }
+  };
+
+  const loadZones = async () => {
+    const candidates = [
+      `${BACKEND_URL}/api/admin/zones/states`,
+      `${BACKEND_URL}/api/admin/zones`,
+      `${BACKEND_URL}/api/admin/zone-states`,
+      `${BACKEND_URL}/api/admin/list-zones`,
+      `${BACKEND_URL}/api/admin/zonas`,
+      `${BACKEND_URL}/api/zones`,
+    ];
+
+    let lastErr = null;
+
+    for (const url of candidates) {
+      try {
+        const data = await fetchJsonSafe(url);
+
+        let zonesArr = [];
+        let statesMap = {};
+
+        if (data && typeof data === 'object' && data.states && typeof data.states === 'object') {
+          statesMap = data.states;
+          zonesArr = Object.keys(statesMap);
+        } else if (Array.isArray(data)) {
+          zonesArr = data;
+        } else if (Array.isArray(data?.zones)) {
+          zonesArr = data.zones;
+          statesMap = data.states || {};
+        } else if (Array.isArray(data?.data)) {
+          zonesArr = data.data;
+        } else if (data && typeof data === 'object') {
+          const keys = Object.keys(data);
+          const looksLikeMap = keys.length > 0 && keys.every((k) => typeof data[k] === 'string' || typeof data[k] === 'object');
+          if (looksLikeMap && !('zones' in data)) {
+            statesMap = data;
+            zonesArr = keys;
+          }
+
+        setZones(Array.isArray(zonesArr) ? zonesArr : []);
+
+        const mapping = {};
+        (zonesArr || []).forEach((z) => {
+          if (typeof z === 'string') {
+            mapping[z] = mapping[z] || 'verde';
+          } else if (z && (z.name || z.zone)) {
+            const name = z.name || z.zone;
+            mapping[name] = normalizeToEs(z.state);
+          }
+        });
+
+        Object.entries(statesMap).forEach(([name, st]) => {
+          mapping[name] = normalizeToEs(st);
+        });
+
+        setZoneStates((prev) => ({ ...prev, ...mapping }));
+        console.info('Zonas cargadas desde', url, { zonas: zonesArr, estados: mapping });
+        return; // éxito
+      } catch (err) {
+        lastErr = err;
+        console.warn('Fallo al cargar zonas desde', url, err);
+        continue;
+      }
+    }
+
+    alert(`No se pudieron cargar zonas. Ver consola. ${lastErr ? lastErr.message : ''}`);
   };
 
   const handleLogin = async (e) => {
-    e?.preventDefault?.();
-    if (!password) { alert('Ingresá la contraseña'); return; }
-    setLoading(true); setMsg('');
+    if (e && e.preventDefault) e.preventDefault();
+    setIsLoading(true);
     try {
-      const r = await fetchJsonStrict(API('/api/admin/login'), {
+      const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ password }),
       });
-      if (r?.success === false) throw new Error(r?.message || 'Login falló');
-      setIsAuthed(true);
-      setPassword('');
-      await refreshStates();
-      setMsg('Autenticado.');
-      // avisa al padre para refrescar mapa si lo desea
-      if (typeof onRefreshZoneStates === 'function') onRefreshZoneStates();
-    } catch (e) {
-      setMsg(e.message);
-      alert(e.message);
+
+      if (response.ok) {
+        setIsAuthenticated(true);
+        setPassword('');
+        await loadZones();
+        alert('Autenticación exitosa');
+      } else {
+        let msg = 'Contraseña incorrecta';
+        try {
+          const err = await response.json();
+          if (err && err.message) msg = err.message;
+        } catch (_) {}
+        alert(msg);
+      }
+    } catch (error) {
+      console.error('Error en login:', error);
+      alert('Error de conexión');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleUpdateOne = async () => {
-    if (!isAuthed) { alert('Inicia sesión para actualizar estados.'); return; }
-    if (!selectedZone) { alert('Selecciona una zona.'); return; }
-    setLoading(true); setMsg('');
+  const handleLogout = async () => {
     try {
-      const body = { zone_name: selectedZone, state: normalizeEn(selectedState) };
-      const res = await fetchJsonStrict(API('/api/admin/zones/update-state'), {
+      await fetch(`${BACKEND_URL}/api/admin/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      setIsAuthenticated(false);
+      setIsVisible(false);
+    } catch (error) {
+      console.error('Error en logout:', error);
+    }
+  };
+
+  const handleUpdateZoneState = async () => {
+    if (!selectedZone || !selectedState) {
+      alert('Selecciona una zona y un estado');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/zones/update-state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          zone_name: selectedZone,
+          state: normalizeToEn(selectedState),
+        }),
       });
-      if (res?.success === false) throw new Error(res?.message || 'Actualización fallida');
-      setZoneStates((prev) => ({ ...prev, [selectedZone]: normalizeEn(selectedState) }));
-      if (typeof onRefreshZoneStates === 'function') onRefreshZoneStates();
-      if (typeof onBulkZoneStatesUpdate === 'function') onBulkZoneStatesUpdate({ [selectedZone]: normalizeEn(selectedState) });
-      setMsg('Estado actualizado.');
-    } catch (e) {
-      setMsg(e.message);
-      alert(e.message);
+
+      if (response.ok) {
+        setZoneStates((prev) => ({ ...prev, [selectedZone]: normalizeToEn(selectedState) }));
+        if (typeof onZoneStateChange === 'function') {
+          onZoneStateChange(selectedZone, normalizeToEn(selectedState));
+        }
+        alert('Estado actualizado correctamente');
+        setSelectedZone('');
+        setSelectedState('verde');
+        await loadZones();
+      } else {
+        let msg = 'Error al actualizar estado';
+        try {
+          const err = await response.json();
+          if (err && err.message) msg = err.message;
+        } catch (_) {}
+        alert(msg);
+      }
+    } catch (error) {
+      console.error('Error actualizando estado:', error);
+      alert('Error de conexión');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const zoneList = useMemo(() => {
-    if (zones && zones.length) return zones;
-    return Object.keys(zoneStates || {}).sort((a,b)=>a.localeCompare(b));
-  }, [zones, zoneStates]);
+  const handleDownloadReport = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/report/generate-pdf`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `reporte_camineria_cerro_largo_${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        alert('Reporte descargado correctamente');
+      } else {
+        let msg = 'Error al generar reporte';
+        try {
+          const err = await response.json();
+          if (err && err.message) msg = err.message;
+        } catch (_) {}
+        alert(msg);
+      }
+    } catch (error) {
+      console.error('Error descargando reporte:', error);
+      alert('Error de conexión al descargar reporte');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const zoneNameOf = (z) => (typeof z === 'string' ? z : (z && (z.name || z.zone)) || '');
+
+  if (!isAuthenticated) {
+    return (
+      <div className={`admin-panel ${isVisible ? 'visible' : ''}`}>
+        <button className="admin-toggle" onClick={() => setIsVisible(!isVisible)}>
+          {isVisible ? '▼' : '▲'} Admin
+        </button>
+
+        {isVisible && (
+          <div className="admin-content">
+            <h4>Acceso Administrador</h4>
+            <form onSubmit={handleLogin}>
+              <input
+                type="password"
+                placeholder="Contraseña"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+              />
+              <button type="submit" disabled={isLoading}>
+                {isLoading ? 'Verificando...' : 'Ingresar'}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className={`admin-panel ${isVisible ? 'visible' : ''}`}>
-      <button className="admin-toggle" onClick={() => setIsVisible((v) => !v)}>
-        {isVisible ? '▼' : '▲'} Admin
+    <div className={`admin-panel authenticated ${isVisible ? 'visible' : ''}`}>
+      <button className="admin-toggle" onClick={() => setIsVisible(!isVisible)}>
+        {isVisible ? '▼' : '▲'} Panel Admin
       </button>
 
-      {isVisible && !isAuthed && (
-        <div className="admin-content">
-          <h4>Acceso Administrador</h4>
-          <form onSubmit={handleLogin} className="admin-login-form">
-            <input
-              type="password"
-              placeholder="Contraseña"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-            />
-            <button type="submit" disabled={loading || !password}>
-              {loading ? 'Verificando…' : 'Ingresar'}
-            </button>
-          </form>
-          {msg && <div className="admin-msg">{msg}</div>}
-        </div>
-      )}
-
-      {isVisible && isAuthed && (
+      {isVisible && (
         <div className="admin-content">
           <div className="admin-header">
             <h4>Panel de Control</h4>
-            <div className="admin-actions">
-              <button onClick={refreshStates} disabled={loading}>{loading ? '...' : '↻ Recargar'}</button>
-            </div>
+            <button onClick={handleLogout} className="logout-btn">
+              Cerrar Sesión
+            </button>
           </div>
 
           <div className="zone-controls">
             <div className="control-group">
-              <label>Zona/Municipio</label>
+              <label>Zona/Municipio:</label>
               <select value={selectedZone} onChange={(e) => setSelectedZone(e.target.value)}>
-                <option value="">Seleccionar…</option>
-                {zoneList.map((z) => (
-                  <option key={z} value={z}>{z}</option>
-                ))}
+                <option value="">Seleccionar zona...</option>
+                {(zones && zones.length > 0 ? zones : zonesProp).map((z) => {
+                  const name = zoneNameOf(z);
+                  return (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
             <div className="control-group">
-              <label>Estado</label>
+              <label>Estado:</label>
               <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)}>
                 <option value="verde">🟩 Habilitado</option>
                 <option value="amarillo">🟨 Alerta</option>
@@ -220,29 +369,33 @@ export default function AdminPanel({ onRefreshZoneStates, onBulkZoneStatesUpdate
             </div>
 
             <div className="button-group">
-              <button onClick={handleUpdateOne} disabled={loading || !selectedZone}>
-                {loading ? 'Actualizando…' : 'Actualizar Estado'}
+              <button onClick={handleUpdateZoneState} disabled={isLoading || !selectedZone} className="update-btn">
+                {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
+              </button>
+
+              <button onClick={handleDownloadReport} disabled={isLoading} className="report-btn">
+                {isLoading ? 'Generando...' : '📄 Descargar Reporte'}
               </button>
             </div>
           </div>
 
           <div className="current-states">
-            <h5>Estados actuales</h5>
+            <h5>Estados Actuales:</h5>
             <div className="states-list">
-              {zoneList.map((z) => (
-                <div key={z} className="state-item">
-                  <span className="zone-name">{z}</span>
-                  <span className="state-indicator" style={{ color: stateColor(zoneStates[z]) }}>
-                    {stateLabelEs(zoneStates[z])}
+              {Object.entries(zoneStates).map(([zone, state]) => (
+                <div key={zone} className="state-item">
+                  <span className="zone-name">{zone}</span>
+                  <span className="state-indicator" style={{ color: getStateColor(state) }}>
+                    {getStateLabel(state)}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-
-          {msg && <div className="admin-msg">{msg}</div>}
         </div>
       )}
     </div>
   );
-}
+};
+
+export default AdminPanel;
