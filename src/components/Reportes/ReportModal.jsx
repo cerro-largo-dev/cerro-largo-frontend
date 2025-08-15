@@ -27,8 +27,8 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
         getLocation();
       }
     }
-    // no limpiamos coords al cerrar para mantener visibles
-  }, [isOpen, onLocationChange]); // eslint-disable-line
+    // NO limpiamos coords al cerrar para mantener marcador/estado visibles
+  }, [isOpen, onLocationChange]);
 
   const getLocation = () => {
     setIsLoadingLocation(true);
@@ -46,6 +46,8 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
         const lng = position.coords.longitude;
 
         setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+
+        // Propagar al padre (persistente)
         if (onLocationChange) onLocationChange({ lat, lng });
 
         setIsLoadingLocation(false);
@@ -73,7 +75,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
   };
 
   const handlePhotoUpload = (e) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files);
     if (files.length + formData.photos.length > 3) {
       alert('Máximo 3 fotos permitidas');
       return;
@@ -102,18 +104,23 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       const formDataToSend = new FormData();
       formDataToSend.append('descripcion', formData.description);
       formDataToSend.append('nombre_lugar', formData.placeName || '');
+
       if (formData.latitude !== null) formDataToSend.append('latitud', String(formData.latitude));
       if (formData.longitude !== null) formDataToSend.append('longitud', String(formData.longitude));
-      formData.photos.forEach((photo) => formDataToSend.append('fotos', photo));
 
+      formData.photos.forEach((photo) => {
+        formDataToSend.append('fotos', photo);
+      });
+
+      // Enviar al backend (sin barra doble, y listo para cookies si algún día las necesitás)
       const response = await fetch(`${BACKEND_URL}/api/reportes`, {
         method: 'POST',
         body: formDataToSend,
-        credentials: 'include'
+        credentials: 'include' // opcional; si el endpoint es público no es requerido
       });
 
       if (response.ok) {
-        const result = await response.json().catch(() => ({}));
+        const result = await response.json();
         console.log('Reporte creado:', result);
         alert('Reporte enviado exitosamente');
         handleClose();
@@ -139,14 +146,17 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       photos: []
     });
     setLocationError('');
+
+    // Limpiar ubicación en el padre al cerrar (si lo necesitás)
     if (onLocationChange) onLocationChange(null);
+
     if (onClose) onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    // fixed para alinear con el FAB a la misma altura (left-24 junto a left-6 del botón)
+    // FIX: usar fixed para ubicarlo junto al FAB (Reporte) a la misma altura
     <div className="fixed bottom-6 left-24 z-[1000] p-4">
       <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
         <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
@@ -240,7 +250,6 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
                 <input
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   multiple
                   onChange={handlePhotoUpload}
                   className="hidden"
@@ -255,7 +264,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
-                  Usar cámara / subir
+                  Subir fotos
                 </button>
                 <span className="text-sm text-gray-500">
                   {formData.photos.length}/3
