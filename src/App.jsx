@@ -1,150 +1,122 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
 import ReportButton from './components/Reportes/ReportButton';
 import './App.css';
 
 export default function App() {
-  const [zoneStates, setZoneStates] = useState({});
+  const [zoneStates, setZoneStates] = useState({}); // { "ARÉVALO": "green", ... }
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Exponer BACKEND_URL (tu env: VITE_REACT_APP_BACKEND_URL)
+  // Exponer la URL del backend para otros componentes (coincide con tu patrón Vite)
   useEffect(() => {
-    const be =
-      (typeof import.meta !== 'undefined' && import.meta.env &&
-        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
-      (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) ||
-      'https://cerro-largo-backend.onrender.com';
+    const be = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+               (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
+               'https://cerro-largo-backend.onrender.com';
     if (typeof window !== 'undefined') window.BACKEND_URL = String(be).replace(/\/$/, '');
   }, []);
 
-  // Mostrar AdminPanel solo en /admin
+  // Detectar si la ruta actual es /admin (y reaccionar a navegaciones con back/forward)
   useEffect(() => {
     const compute = () => {
-      const path = (typeof window !== 'undefined' && window.location && window.location.pathname) || '';
-      setIsAdminRoute(/^\/admin\/?$/.test(path));
+      try {
+        const path = (typeof window !== 'undefined' && window.location && window.location.pathname) || '';
+        setIsAdminRoute(/^\/admin\/?$/.test(path));
+      } catch {
+        setIsAdminRoute(false);
+      }
     };
     compute();
     window.addEventListener('popstate', compute);
     return () => window.removeEventListener('popstate', compute);
   }, []);
 
-  // -------- GEO “DES-EMPAQUETADA” --------
+  // ---------------- Geolocalización robusta (evita TIMEOUT y POSITION_UNAVAILABLE) ----------------
   const FALLBACK = { lat: -32.3667, lng: -54.1667 }; // Cerro Largo
 
-  const gpOnce = (opts) =>
-    new Promise((res, rej) => {
-      if (!('geolocation' in navigator)) return rej(new Error('no-geolocation'));
-      navigator.geolocation.getCurrentPosition(
-        (p) => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        (e) => rej(e),
-        opts
-      );
-    });
+  const gpOnce = (opts) => new Promise((res, rej) => {
+    if (!('geolocation' in navigator)) return rej(new Error('no-geolocation'));
+    navigator.geolocation.getCurrentPosition(
+      (p) => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      (e) => rej(e),
+      opts
+    );
+  });
 
-  const gpWatch = (opts, ms = 8000) =>
-    new Promise((res, rej) => {
-      if (!('geolocation' in navigator) || !navigator.geolocation.watchPosition) return rej(new Error('no-watch'));
-      let done = false;
-      const id = navigator.geolocation.watchPosition(
-        (p) => {
-          if (done) return;
-          done = true;
-          navigator.geolocation.clearWatch(id);
-          res({ lat: p.coords.latitude, lng: p.coords.longitude });
-        },
-        (e) => {
-          if (done) return;
-          done = true;
-          navigator.geolocation.clearWatch(id);
-          rej(e);
-        },
-        opts
-      );
-      setTimeout(() => {
-        if (done) return;
-        done = true;
-        navigator.geolocation.clearWatch(id);
-        rej(new Error('watch-timeout'));
-      }, ms);
-    });
+  const watchOnce = (opts, ms = 10000) => new Promise((res, rej) => {
+    if (!('geolocation' in navigator) || !navigator.geolocation.watchPosition) return rej(new Error('no-watch'));
+    let done = false;
+    const id = navigator.geolocation.watchPosition(
+      (p) => { if (done) return; done = true; navigator.geolocation.clearWatch(id); res({ lat: p.coords.latitude, lng: p.coords.longitude }); },
+      (e) => { if (done) return; done = true; navigator.geolocation.clearWatch(id); rej(e); },
+      opts
+    );
+    setTimeout(() => { if (done) return; done = true; navigator.geolocation.clearWatch(id); rej(new Error('watch-timeout')); }, ms);
+  });
 
-  const resolveLocation = useCallback(async () => {
-    // 1) Alta precisión
+  const getLocationRacer = useCallback(async () => {
     try {
-      const l1 = await gpOnce({ enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
-      setUserLocation(l1);
-      return;
+      // Carrera: baja precisión (rápida) vs alta precisión (más exacta)
+      const low = gpOnce({ enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
+      const high = gpOnce({ enableHighAccuracy: true, timeout: 25000, maximumAge: 300000 });
+      const first = await Promise.race([low, high]);
+      setUserLocation(first);
+      // Si luego llega la de alta precisión, la usamos para refinar sin bloquear la UI
+      high.then((precise) => setUserLocation((cur) => cur || precise)).catch(() => {});
     } catch (e1) {
-      // 2) Baja precisión si POSITION_UNAVAILABLE (code 2) o cualquier fallo
+      // Respaldo: watchPosition (suele “despertar” proveedores)
       try {
-        const l2 = await gpOnce({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
-        setUserLocation(l2);
-        return;
+        const loc = await watchOnce({ enableHighAccuracy: false, maximumAge: 300000 }, 10000);
+        setUserLocation(loc);
       } catch (e2) {
-        // 3) Último intento: watchPosition (a veces “despierta” proveedores)
-        try {
-          const l3 = await gpWatch({ enableHighAccuracy: false, maximumAge: 300000 }, 10000);
-          setUserLocation(l3);
-          return;
-        } catch (_) {
-          // 4) Fallback
-          setUserLocation(FALLBACK);
-          return;
-        }
+        // Fallback Cerro Largo
+        setUserLocation(FALLBACK);
       }
     }
   }, []);
 
-  // Pídelo al montar (sin esperar gestos)
-  useEffect(() => {
-    resolveLocation();
-  }, [resolveLocation]);
-  // -------- FIN GEO --------
+  useEffect(() => { getLocationRacer(); }, [getLocationRacer]);
+  // -----------------------------------------------------------------------------------------------
 
-  // Callbacks existentes
-  const handleZoneStatesLoad = (initialStates) => {
-    if (initialStates && typeof initialStates === 'object') setZoneStates(initialStates);
+  // --- Utilidades de red ---
+  const BACKEND_URL = (typeof window !== 'undefined' && window.BACKEND_URL) || 'https://cerro-largo-backend.onrender.com';
+
+  const fetchJson = async (url, options = {}) => {
+    const res = await fetch(url, { credentials: 'include', ...options });
+    const ct = res.headers.get('content-type') || '';
+    const text = await res.text();
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + text.slice(0, 200));
+    if (ct.indexOf('application/json') === -1) throw new Error('No-JSON: ' + text.slice(0, 200));
+    try { return JSON.parse(text); } catch { return {}; }
   };
-  const handleZonesLoad = (zonesList) => { if (Array.isArray(zonesList)) setZones(zonesList); };
 
+  // --- Callbacks que usa el mapa y el panel ---
   const handleZoneStateChange = (zoneName, newStateEn) => {
-    // Refresco inmediato del mapa
+    // Refresca inmediatamente el color en el mapa sin recargar
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
-  };
-
-  const handleBulkZoneStatesUpdate = (updatesMap) => {
-    if (updatesMap && typeof updatesMap === 'object') {
-      setZoneStates((prev) => ({ ...prev, ...updatesMap }));
-    }
   };
 
   const handleRefreshZoneStates = async () => {
     try {
-      const be = (typeof window !== 'undefined' && window.BACKEND_URL) || 'https://cerro-largo-backend.onrender.com';
-      const url = String(be).replace(/\/$/, '') + '/api/admin/zones/states';
-      const res = await fetch(url, { credentials: 'include' });
-      const ct = res.headers.get('content-type') || '';
-      const txt = await res.text();
-      if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + txt.slice(0, 200));
-      if (ct.indexOf('application/json') === -1) throw new Error('No-JSON: ' + txt.slice(0, 200));
-      const data = JSON.parse(txt);
-      const map = {};
+      const data = await fetchJson(BACKEND_URL.replace(/\/$/, '') + '/api/admin/zones/states');
       if (data && data.states) {
-        for (const name in data.states) {
-          if (Object.prototype.hasOwnProperty.call(data.states, name)) {
-            map[name] = (data.states[name] && data.states[name].state) || 'red';
-          }
-        }
+        const mapping = {};
+        Object.entries(data.states).forEach(([name, info]) => { mapping[name] = (info && info.state) || 'red'; });
+        setZoneStates(mapping);
       }
-      setZoneStates(map);
     } catch (e) {
       console.warn('No se pudo refrescar estados:', e.message);
     }
   };
 
+  const handleBulkZoneStatesUpdate = (updatesMap) => {
+    if (!updatesMap || typeof updatesMap !== 'object') return;
+    setZoneStates((prev) => ({ ...prev, ...updatesMap }));
+  };
+
+  const handleZonesLoad = (loadedZones) => { if (Array.isArray(loadedZones)) setZones(loadedZones); };
   const handleUserLocationChange = (loc) => { if (loc) setUserLocation(loc); };
 
   return (
@@ -152,7 +124,7 @@ export default function App() {
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
-        onZoneStatesLoad={handleZoneStatesLoad}
+        onZoneStatesLoad={(initialStates) => initialStates && setZoneStates(initialStates)}
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
