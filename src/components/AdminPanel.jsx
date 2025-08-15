@@ -143,9 +143,7 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
           if (looksLikeMap && !('zones' in data)) {
             statesMap = data;
             zonesArr = keys;
-          }
-
-        setZones(Array.isArray(zonesArr) ? zonesArr : []);
+          }$1}$1setZones(Array.isArray(zonesArr) ? zonesArr : []);
 
         const mapping = {};
         (zonesArr || []).forEach((z) => {
