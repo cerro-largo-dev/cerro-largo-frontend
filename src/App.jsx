@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
-import './App.css';
 import ReportButton from './components/Reportes/ReportButton';
+import './App.css';
 
 export default function App() {
   const [zoneStates, setZoneStates] = useState({});
@@ -10,10 +10,11 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(null);
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Exponer BACKEND_URL para el resto de la app
+  // Exponer BACKEND_URL al window para componentes que lo usan
   useEffect(() => {
     const be =
-      (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+      (typeof import.meta !== 'undefined' && import.meta.env &&
+        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
       (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) ||
       'https://cerro-largo-backend.onrender.com';
     if (typeof window !== 'undefined') window.BACKEND_URL = be;
@@ -34,10 +35,10 @@ export default function App() {
     return () => window.removeEventListener('popstate', compute);
   }, []);
 
-  // Geolocalización inicial
+  // GEOLOCALIZACIÓN (pide permiso al montar)
   useEffect(() => {
     if (!navigator.geolocation) {
-      setUserLocation({ lat: -32.3667, lng: -54.1667 });
+      setUserLocation({ lat: -32.3667, lng: -54.1667 }); // Cerro Largo fallback
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -47,56 +48,57 @@ export default function App() {
     );
   }, []);
 
-  const BACKEND_URL =
-    (typeof window !== 'undefined' && window.BACKEND_URL) ||
-    (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_REACT_APP_BACKEND_URL) ||
-    'https://cerro-largo-backend.onrender.com';
-
-  const fetchJson = async function (url, options) {
-    const res = await fetch(url, Object.assign({ credentials: 'include' }, options || {}));
-    const ct = res.headers.get('content-type') || '';
-    const text = await res.text();
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + text.slice(0, 200));
-    if (ct.indexOf('application/json') === -1) throw new Error('No-JSON: ' + text.slice(0, 200));
-    return JSON.parse(text);
+  // Handlers que consumen Mapa/AdminPanel
+  const handleZoneStatesLoad = (initialStates) => {
+    if (initialStates && typeof initialStates === 'object') setZoneStates(initialStates);
   };
 
-  const handleZoneStatesLoad = (initial) => {
-    if (initial && typeof initial === 'object') setZoneStates(initial);
+  const handleZonesLoad = (zonesList) => {
+    if (Array.isArray(zonesList)) setZones(zonesList);
   };
-  const handleZonesLoad = (list) => {
-    if (Array.isArray(list)) setZones(list);
-  };
-  const handleZoneStateChange = (zoneName, newState) => {
-    setZoneStates(function (prev) {
-      const next = Object.assign({}, prev);
-      next[zoneName] = newState;
+
+  // Refresco instantáneo del mapa cuando AdminPanel cambia un estado
+  const handleZoneStateChange = (zoneName, newStateEn) => {
+    setZoneStates((prev) => {
+      const next = { ...prev };
+      next[zoneName] = newStateEn;
       return next;
     });
   };
-  const handleBulkZoneStatesUpdate = (updates) => {
-    if (updates && typeof updates === 'object') {
-      setZoneStates(function (prev) { return Object.assign({}, prev, updates); });
+
+  const handleBulkZoneStatesUpdate = (updatesMap) => {
+    if (updatesMap && typeof updatesMap === 'object') {
+      setZoneStates((prev) => ({ ...prev, ...updatesMap }));
     }
   };
+
   const handleRefreshZoneStates = async () => {
     try {
-      const url = BACKEND_URL.replace(/\/$/, '') + '/api/admin/zones/states';
-      const data = await fetchJson(url);
-      if (data && data.success && data.states) {
-        const map = {};
+      const be = (typeof window !== 'undefined' && window.BACKEND_URL) || 'https://cerro-largo-backend.onrender.com';
+      const url = be.replace(/\/$/, '') + '/api/admin/zones/states';
+      const res = await fetch(url, { credentials: 'include' });
+      const ct = res.headers.get('content-type') || '';
+      const txt = await res.text();
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + txt.slice(0, 200));
+      if (ct.indexOf('application/json') === -1) throw new Error('No-JSON: ' + txt.slice(0, 200));
+      const data = JSON.parse(txt);
+      const map = {};
+      if (data && data.states) {
         for (const name in data.states) {
           if (Object.prototype.hasOwnProperty.call(data.states, name)) {
             map[name] = (data.states[name] && data.states[name].state) || 'red';
           }
         }
-        setZoneStates(map);
       }
+      setZoneStates(map);
     } catch (e) {
       console.warn('No se pudo refrescar estados:', e.message);
     }
   };
-  const handleUserLocationChange = (loc) => { if (loc) setUserLocation(loc); };
+
+  const handleUserLocationChange = (loc) => {
+    if (loc) setUserLocation(loc);
+  };
 
   return (
     <div className="app-container">
@@ -108,7 +110,11 @@ export default function App() {
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
       />
+
+      {/* Botón de reportes siempre visible (mismo lugar de antes) */}
       <ReportButton onLocationChange={handleUserLocationChange} />
+
+      {/* Panel solo en /admin */}
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
