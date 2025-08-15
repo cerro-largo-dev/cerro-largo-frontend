@@ -1,129 +1,131 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 /**
- * AdminPanel integrado con backend; se agrega soporte a roles (admin/editor) y allowed_zones.
- * Cambios mínimos:
- *  - check-auth ahora guarda role y allowed_zones.
- *  - loadZones filtra zonas si rol=editor.
- *  - handleUpdateZoneState bloquea si la zona no está permitida.
- *  - Sin reestructurar el resto (descarga de reporte, etc.).
+ * AdminPanel con:
+ * - Login (admin o editor por zona)
+ * - Filtro de zonas según allowed_zones
+ * - Update de estado con credenciales (CORS + cookies)
+ * - Descarga de reporte en /api/report/download
+ * - Editor de Banner (debajo de “Estados actuales”) con POST /api/admin/banner
+ * - Emite CustomEvents para refrescar mapa y banner sin recargar
+ *
+ * Estructura respetada: toggle, login, selects, botones y lista de estados.
  */
-const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones: zonesProp = [] }) => {
+const AdminPanel = ({
+  onZoneStateChange,
+  zoneStates: zoneStatesProp = {},
+  zones: zonesProp = [],
+}) => {
+  // UI / sesión
+  const [isVisible, setIsVisible] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [isVisible, setIsVisible] = useState(false);
-  const [selectedZone, setSelectedZone] = useState('');
-  const [selectedState, setSelectedState] = useState('verde');
-  const [isLoading, setIsLoading] = useState(false);
-  const [zones, setZones] = useState(zonesProp);
-  const [zoneStates, setZoneStates] = useState(zoneStatesProp);
-
-  // NUEVO: rol y zonas permitidas
   const [role, setRole] = useState(null);            // 'admin' | 'editor'
   const [allowedZones, setAllowedZones] = useState('*'); // '*' | [] | ['AREVALO', ...]
 
+  // Zonas y estados
+  const [zones, setZones] = useState(zonesProp);
+  const [zoneStates, setZoneStates] = useState(zoneStatesProp);
+  const [selectedZone, setSelectedZone] = useState('');
+  const [selectedState, setSelectedState] = useState('verde');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // URL del backend (tu patrón)
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
     (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
     (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
     'https://cerro-largo-backend.onrender.com';
 
-  // Orden fijo de zonas/municipios solicitado
+  const API = useMemo(() => {
+    const base = String(BACKEND_URL || '').replace(/\/$/, '');
+    return (p) => base + p;
+  }, [BACKEND_URL]);
+
+  // Orden fijo solicitado
   const DESIRED_ZONE_ORDER = [
-    "ACEGUÁ","FRAILE MUERTO","RÍO BRANCO","TUPAMBAÉ","LAS CAÑAS","ISIDORO NOBLÍA","CERRO DE LAS CUENTAS","ARÉVALO","BAÑADO DE MEDINA","TRES ISLAS","LAGUNA MERÍN","CENTURIÓN","RAMÓN TRIGO","ARBOLITO","QUEBRACHO","PLÁCIDO ROSAS","Melo (GBA)","Melo (GBB)","Melo (GBC)","Melo (GCB)","Melo (GEB)"
+    'ACEGUÁ', 'FRAILE MUERTO', 'RÍO BRANCO', 'TUPAMBAÉ', 'LAS CAÑAS', 'ISIDORO NOBLÍA',
+    'CERRO DE LAS CUENTAS', 'ARÉVALO', 'BAÑADO DE MEDINA', 'TRES ISLAS', 'LAGUNA MERÍN',
+    'CENTURIÓN', 'RAMÓN TRIGO', 'ARBOLITO', 'QUEBRACHO', 'PLÁCIDO ROSAS',
+    'Melo (GBA)', 'Melo (GBB)', 'Melo (GBC)', 'Melo (GCB)', 'Melo (GEB)'
   ];
 
-  // Helper: intenta parsear JSON; si viene HTML (<!doctype ...>) lanza error con snippet legible.
-  const fetchJsonSafe = async (url, options = {}) => {
-    const res = await fetch(url, { credentials: 'include', ...options });
-    const ct = res.headers.get('content-type') || '';
-    if (!res.ok) {
-      let body = '';
-      try { body = await res.text(); } catch (_) {}
-      throw new Error(`HTTP ${res.status} ${res.statusText} en ${url} — ${body.slice(0, 200)}`);
-    }
-    if (ct.includes('application/json')) {
-      return res.json();
-    }
-    const text = await res.text();
-    throw new Error(`Respuesta no JSON desde ${url}: ${text.slice(0, 200)}`);
-  };
-
-  useEffect(() => {
-    checkAuthentication();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Normalizadores de estado (aceptan string o {state})
+  // Helpers de estado
   const normalizeToEs = (state) => {
     const raw = typeof state === 'string' ? state : (state && state.state);
     const s = String(raw || '').toLowerCase();
-    const map = { green:'verde', yellow:'amarillo', red:'rojo', verde:'verde', amarillo:'amarillo', rojo:'rojo' };
+    const map = { green: 'verde', yellow: 'amarillo', red: 'rojo', verde: 'verde', amarillo: 'amarillo', rojo: 'rojo' };
     return map[s] || 'sin-estado';
   };
 
   const normalizeToEn = (state) => {
     const raw = typeof state === 'string' ? state : (state && state.state);
     const s = String(raw || '').toLowerCase();
-    const map = { verde:'green', amarillo:'yellow', rojo:'red', green:'green', yellow:'yellow', red:'red' };
+    const map = { verde: 'green', amarillo: 'yellow', rojo: 'red', green: 'green', yellow: 'yellow', red: 'red' };
     return map[s] || 'red';
   };
 
   const getStateColor = (state) => {
-    const s = normalizeToEs(state);
-    switch (s) {
-      case 'verde':
-        return '#22c55e';
-      case 'amarillo':
-        return '#eab308';
-      case 'rojo':
-        return '#ef4444';
-      default:
-        return '#6b7280';
+    switch (normalizeToEs(state)) {
+      case 'verde': return '#22c55e';
+      case 'amarillo': return '#eab308';
+      case 'rojo': return '#ef4444';
+      default: return '#6b7280';
     }
   };
 
   const getStateLabel = (state) => {
-    const s = normalizeToEs(state);
-    switch (s) {
-      case 'verde':
-        return '🟩 Habilitado';
-      case 'amarillo':
-        return '🟨 Alerta';
-      case 'rojo':
-        return '🟥 Suspendido';
-      default:
-        return 'Sin estado';
+    switch (normalizeToEs(state)) {
+      case 'verde': return '🟩 Habilitado';
+      case 'amarillo': return '🟨 Alerta';
+      case 'rojo': return '🟥 Suspendido';
+      default: return 'Sin estado';
     }
   };
 
-  // Canonizador JS (mayúsculas, sin acentos)
-  const canon = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().trim();
+  // Canonizador (mayúsculas, sin acentos)
+  const canon = (s) => (s || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toUpperCase()
+    .trim();
+
+  // Fetch JSON robusto (evita el error "<!doctype ... no es JSON")
+  const fetchJsonSafe = async (url, options = {}) => {
+    const res = await fetch(url, { credentials: 'include', ...options });
+    const ct = res.headers.get('content-type') || '';
+    const text = await res.text();
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + text.slice(0, 200));
+    if (ct.indexOf('application/json') === -1) throw new Error('No-JSON: ' + text.slice(0, 200));
+    try { return JSON.parse(text); } catch { return {}; }
+  };
+
+  // Check de sesión al montar
+  useEffect(() => { checkAuthentication(); /* eslint-disable-next-line */ }, []);
 
   const checkAuthentication = async () => {
     try {
-      const data = await fetchJsonSafe(`${BACKEND_URL}/api/admin/check-auth`, { credentials: 'include' });
+      const data = await fetchJsonSafe(API('/api/admin/check-auth'));
       if (data && data.authenticated === true) {
         setIsAuthenticated(true);
         setRole(data.role || 'admin');
         setAllowedZones(data.allowed_zones ?? (data.role === 'admin' ? '*' : []));
         await loadZones(data.allowed_zones);
       }
-    } catch (error) {
-      console.error('Error verificando autenticación:', error);
+    } catch (err) {
+      // sin sesión, queda en login
     }
   };
 
   const loadZones = async (allowed = allowedZones) => {
     const candidates = [
-      `${BACKEND_URL}/api/admin/zones/states`,
-      `${BACKEND_URL}/api/admin/zones`,
-      `${BACKEND_URL}/api/admin/zone-states`,
-      `${BACKEND_URL}/api/admin/list-zones`,
-      `${BACKEND_URL}/api/admin/zonas`,
-      `${BACKEND_URL}/api/zones`,
+      API('/api/admin/zones/states'),
+      API('/api/admin/zones'),
+      API('/api/admin/zone-states'),
+      API('/api/admin/list-zones'),
+      API('/api/admin/zonas'),
+      API('/api/zones'),
     ];
-
     let lastErr = null;
 
     for (const url of candidates) {
@@ -151,10 +153,11 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
             zonesArr = keys;
           }
         }
+
         // Orden fijo solicitado
         zonesArr = DESIRED_ZONE_ORDER.slice();
 
-        // FILTRO por rol editor
+        // Filtro por rol editor
         if (allowed && allowed !== '*' && Array.isArray(allowed) && allowed.length) {
           const setAllowed = new Set(allowed.map(canon));
           zonesArr = (zonesArr || []).filter((n) => setAllowed.has(canon(typeof n === 'string' ? n : (n && (n.name || n.zone)) || '')));
@@ -174,7 +177,6 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
         });
 
         Object.entries(statesMap).forEach(([name, st]) => {
-          // Solo las zonas del orden solicitado
           if ((zonesArr || []).includes(name)) {
             if (!allowed || allowed === '*' || (Array.isArray(allowed) && allowed.map(canon).includes(canon(name)))) {
               mapping[name] = normalizeToEs(st);
@@ -183,31 +185,26 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
         });
 
         setZoneStates((prev) => ({ ...prev, ...mapping }));
-        console.info('Zonas cargadas desde', url, { zonas: zonesArr, estados: mapping });
         return; // éxito
       } catch (err) {
         lastErr = err;
-        console.warn('Fallo al cargar zonas desde', url, err);
         continue;
       }
     }
-
-    alert(`No se pudieron cargar zonas. Ver consola. ${lastErr ? lastErr.message : ''}`);
+    alert('No se pudieron cargar zonas. Ver consola. ' + (lastErr ? lastErr.message : ''));
   };
 
   const handleLogin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setIsLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
+      const d = await fetchJsonSafe(API('/api/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ password }),
       });
-
-      if (response.ok) {
-        const d = await response.json().catch(() => ({}));
+      if (d && d.success) {
         setIsAuthenticated(true);
         setPassword('');
         setRole(d.role || 'admin');
@@ -215,16 +212,10 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
         await loadZones(d.allowed_zones);
         alert(d.message || 'Autenticación exitosa');
       } else {
-        let msg = 'Contraseña incorrecta';
-        try {
-          const err = await response.json();
-          if (err && err.message) msg = err.message;
-        } catch (_) {}
-        alert(msg);
+        alert((d && d.message) || 'Contraseña incorrecta');
       }
-    } catch (error) {
-      console.error('Error en login:', error);
-      alert('Error de conexión');
+    } catch (err) {
+      alert(err.message || 'Error de conexión');
     } finally {
       setIsLoading(false);
     }
@@ -232,17 +223,12 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
 
   const handleLogout = async () => {
     try {
-      await fetch(`${BACKEND_URL}/api/admin/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      setIsAuthenticated(false);
-      setIsVisible(false);
-      setRole(null);
-      setAllowedZones('*');
-    } catch (error) {
-      console.error('Error en logout:', error);
-    }
+      await fetch(API('/api/admin/logout'), { method: 'POST', credentials: 'include' });
+    } catch {}
+    setIsAuthenticated(false);
+    setIsVisible(false);
+    setRole(null);
+    setAllowedZones('*');
   };
 
   const handleUpdateZoneState = async () => {
@@ -250,19 +236,15 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
       alert('Selecciona una zona y un estado');
       return;
     }
-
-    // Bloqueo en UI si no está autorizado (rol editor)
+    // Bloqueo UI si editor fuera de zona permitida
     if (allowedZones !== '*' && Array.isArray(allowedZones) && allowedZones.length) {
       const ok = allowedZones.map(canon).includes(canon(selectedZone));
-      if (!ok) {
-        alert('No estás autorizado para esta zona');
-        return;
-      }
+      if (!ok) { alert('No estás autorizado para esta zona'); return; }
     }
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/zones/update-state`, {
+      const d = await fetchJsonSafe(API('/api/admin/zones/update-state'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -271,38 +253,27 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
           state: normalizeToEn(selectedState),
         }),
       });
+      if (!d || d.success === false) throw new Error((d && d.message) || 'Error al actualizar');
 
-      if (response.ok) {
-        const enState = normalizeToEn(selectedState);
-        // 1) Actualiza estado local del panel (vista lateral)
-        setZoneStates((prev) => ({ ...prev, [selectedZone]: enState }));
-        // 2) Notifica al resto de la app (callback si está provisto)
-        if (typeof onZoneStateChange === 'function') {
-          try { onZoneStateChange(selectedZone, enState); } catch (_) {}
-        }
-        // 3) Notificación global opcional (sin tocar App): CustomEvent
-        try {
-          window.dispatchEvent(new CustomEvent('zoneStateUpdated', {
-            detail: { zone_name: selectedZone, state: enState }
-          }));
-        } catch (_) {}
+      // 1) Estado local (para la lista del panel)
+      const enState = normalizeToEn(selectedState);
+      setZoneStates((prev) => ({ ...prev, [selectedZone]: enState }));
 
-        alert('Estado actualizado correctamente');
-        setSelectedZone('');
-        setSelectedState('verde');
-        // Refresco suave (opcional) para sincronizar si hay otros clientes
-        await loadZones();
-      } else {
-        let msg = 'Error al actualizar estado';
-        try {
-          const err = await response.json();
-          if (err && err.message) msg = err.message;
-        } catch (_) {}
-        alert(msg);
+      // 2) Notifica al mapa via callback de App (si existe)
+      if (typeof onZoneStateChange === 'function') {
+        try { onZoneStateChange(selectedZone, enState); } catch {}
       }
-    } catch (error) {
-      console.error('Error actualizando estado:', error);
-      alert('Error de conexión');
+
+      // 3) Evento global opcional
+      try {
+        window.dispatchEvent(new CustomEvent('zoneStateUpdated', { detail: { zone_name: selectedZone, state: enState } }));
+      } catch {}
+
+      alert('Estado actualizado correctamente');
+      setSelectedZone('');
+      setSelectedState('verde');
+    } catch (err) {
+      alert(err.message || 'Error de conexión');
     } finally {
       setIsLoading(false);
     }
@@ -311,40 +282,106 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
   const handleDownloadReport = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/report/download`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `reporte_camineria_cerro_largo_${new Date().toISOString().slice(0, 10)}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        alert('Reporte descargado correctamente');
-      } else {
+      const res = await fetch(API('/api/report/download'), { method: 'GET', credentials: 'include' });
+      if (!res.ok) {
         let msg = 'Error al generar reporte';
-        try {
-          const err = await response.json();
-          if (err && err.message) msg = err.message;
-        } catch (_) {}
-        alert(msg);
+        try { const e = await res.json(); if (e && e.message) msg = e.message; } catch {}
+        throw new Error(msg);
       }
-    } catch (error) {
-      console.error('Error descargando reporte:', error);
-      alert('Error de conexión al descargar reporte');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'reporte_camineria_cerro_largo_' + new Date().toISOString().slice(0, 10) + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      alert('Reporte descargado correctamente');
+    } catch (err) {
+      alert(err.message || 'Error de conexión al descargar reporte');
     } finally {
       setIsLoading(false);
     }
   };
 
   const zoneNameOf = (z) => (typeof z === 'string' ? z : (z && (z.name || z.zone)) || '');
+
+  // -------- Banner Editor (debajo de “Estados actuales”) --------
+  const BannerEditor = ({ BACKEND_URL }) => {
+    const [text, setText] = useState('');
+    const [enabled, setEnabled] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    const api = useMemo(() => {
+      const base = String(BACKEND_URL || '').replace(/\/$/, '');
+      return (p) => base + p;
+    }, [BACKEND_URL]);
+
+    useEffect(() => {
+      (async () => {
+        try {
+          const res = await fetch(api('/api/admin/banner'), { credentials: 'include' });
+          const d = await res.json().catch(() => ({}));
+          if (res.ok && d) {
+            setText(String(d.text || ''));
+            setEnabled(Boolean(d.enabled && String(d.text || '').trim().length > 0));
+          }
+        } catch {}
+      })();
+    }, [api]);
+
+    const save = async () => {
+      setSaving(true);
+      try {
+        const body = {
+          text: String(text || ''),
+          enabled: Boolean(enabled && String(text || '').trim().length > 0),
+          variant: 'info',
+        };
+        const res = await fetch(api('/api/admin/banner'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || (d && d.success === false)) throw new Error((d && d.message) || 'Error al guardar');
+        // Notificar al SiteBanner en vivo
+        try { window.dispatchEvent(new CustomEvent('bannerUpdated', { detail: d.banner || body })); } catch {}
+        alert('Banner guardado');
+      } catch (e) {
+        alert(e.message || 'Error al guardar');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div className="banner-editor" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+        <h5 style={{ marginBottom: 8 }}>Mensaje público (Banner)</h5>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            placeholder="Escribe el mensaje del banner (si está vacío, no se muestra)"
+            style={{ width: '100%', padding: 8, border: '1px solid #d1d5db', borderRadius: 6 }}
+          />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Mostrar banner
+          </label>
+          <div>
+            <button onClick={save} disabled={saving} className="update-btn">
+              {saving ? 'Guardando…' : 'Guardar banner'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  // ---------------------------------------------------------------
 
   if (!isAuthenticated) {
     return (
@@ -384,9 +421,7 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
         <div className="admin-content">
           <div className="admin-header">
             <h4>Panel de Control</h4>
-            <button onClick={handleLogout} className="logout-btn">
-              Cerrar Sesión
-            </button>
+            <button onClick={handleLogout} className="logout-btn">Cerrar Sesión</button>
           </div>
 
           <div className="zone-controls">
@@ -396,15 +431,10 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
                 <option value="">Seleccionar zona...</option>
                 {(zones && zones.length > 0 ? zones : zonesProp).map((z) => {
                   const name = zoneNameOf(z);
-                  // Filtrado UI si es editor
                   if (allowedZones !== '*' && Array.isArray(allowedZones) && allowedZones.length) {
                     if (!allowedZones.map(canon).includes(canon(name))) return null;
                   }
-                  return (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  );
+                  return <option key={name} value={name}>{name}</option>;
                 })}
               </select>
             </div>
@@ -422,7 +452,6 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
               <button onClick={handleUpdateZoneState} disabled={isLoading || !selectedZone} className="update-btn">
                 {isLoading ? 'Actualizando...' : 'Actualizar Estado'}
               </button>
-
               <button onClick={handleDownloadReport} disabled={isLoading} className="report-btn">
                 {isLoading ? 'Generando...' : '📄 Descargar Reporte'}
               </button>
@@ -447,6 +476,9 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
               })}
             </div>
           </div>
+
+          {/* Editor de banner (debajo de estados) */}
+          <BannerEditor BACKEND_URL={BACKEND_URL} />
         </div>
       )}
     </div>
