@@ -1,18 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-/**
- * SiteBanner
- * - Muestra un banner público “INFORMA:” al lado del botón de Reportes.
- * - Lee config desde backend:
- *     GET /api/admin/banner   (público)
- *     (fallback) GET /api/banner
- * - Se actualiza en vivo cuando el AdminPanel guarda (escucha "bannerUpdated").
- * - Si no hay texto o enabled=false, no renderiza nada.
- */
 export default function SiteBanner() {
   const [cfg, setCfg] = useState(null);
+  const [leftOffset, setLeftOffset] = useState(92); // 24 (left) + 56 (btn) + 12 (gap)
 
-  // BACKEND_URL como en el resto de tu app
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
     (typeof import.meta !== 'undefined' &&
@@ -37,9 +28,7 @@ export default function SiteBanner() {
   };
 
   const fetchBanner = async () => {
-    // Intenta /api/admin/banner; si falla, prueba /api/banner
-    const urls = [API('/api/admin/banner'), API('/api/banner')];
-    for (const url of urls) {
+    for (const url of [API('/api/admin/banner'), API('/api/banner')]) {
       try {
         const res = await fetch(url, { credentials: 'include' });
         const data = await parseMaybeJson(res);
@@ -54,16 +43,28 @@ export default function SiteBanner() {
           });
           return;
         }
-      } catch {
-        // probar siguiente
-      }
+      } catch { /* intenta siguiente */ }
     }
     setCfg(null);
   };
 
-  useEffect(() => { fetchBanner(); }, []); // al montar
+  // Offset dinámico en base al FAB
+  useEffect(() => {
+    const compute = () => {
+      const fab = document.querySelector('.report-fab');
+      const baseLeft = 24;   // tailwind left-6
+      const baseBottom = 24; // tailwind bottom-6 (solo referencia)
+      const fabWidth = fab ? fab.offsetWidth : 56; // h/w-14 → 56px aprox
+      const gap = 12;
+      setLeftOffset(baseLeft + fabWidth + gap);
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, []);
 
-  // Actualización en vivo desde AdminPanel
+  // Cargar banner + live update
+  useEffect(() => { fetchBanner(); }, []);
   useEffect(() => {
     const h = (e) => {
       const b = e?.detail || {};
@@ -84,10 +85,8 @@ export default function SiteBanner() {
     return () => window.removeEventListener('bannerUpdated', h);
   }, []);
 
-  // Si no hay banner, no renderiza nada
   if (!cfg || !cfg.enabled || !String(cfg.text || '').trim()) return null;
 
-  // Paletas por variante
   const palette =
     {
       info:    { bg: 'rgba(59,130,246,0.12)',  bd: '#93c5fd', color: '#1d4ed8' },
@@ -96,17 +95,15 @@ export default function SiteBanner() {
       success: { bg: 'rgba(34,197,94,0.12)',   bd: '#bbf7d0', color: '#14532d' },
     }[cfg.variant] || { bg: 'rgba(59,130,246,0.12)', bd: '#93c5fd', color: '#1d4ed8' };
 
-  // Posicionado para quedar al lado del botón de reportes (que suele estar top-right).
-  // Si tu botón cambia de posición, ajustá right/top.
-  const boxStyle = {
+  const style = {
     position: 'fixed',
-    top: 12,
-    right: 84, // deja espacio para el botón de reportes a la derecha
+    bottom: 24,
+    left: leftOffset, // ← queda a la derecha del botón
     zIndex: 1000,
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    maxWidth: '62vw',
+    maxWidth: 'calc(100vw - 32px - 56px - 12px)', // evita salir de pantalla
     padding: '6px 10px',
     borderRadius: 8,
     backdropFilter: 'blur(2px)',
@@ -118,23 +115,15 @@ export default function SiteBanner() {
     lineHeight: 1.3,
   };
 
-  const link =
-    cfg.link_href && cfg.link_text ? (
-      <a
-        href={cfg.link_href}
-        target="_blank"
-        rel="noreferrer"
-        style={{ marginLeft: 8, textDecoration: 'underline', color: palette.color }}
-      >
-        {cfg.link_text}
-      </a>
-    ) : null;
-
   return (
-    <div style={boxStyle} role="status" aria-live="polite">
+    <div style={style} role="status" aria-live="polite">
       <span style={{ fontWeight: 600 }}>INFORMA:</span>
       <span>{cfg.text}</span>
-      {link}
+      {cfg.link_href && cfg.link_text ? (
+        <a href={cfg.link_href} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', marginLeft: 8 }}>
+          {cfg.link_text}
+        </a>
+      ) : null}
     </div>
   );
 }
