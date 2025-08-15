@@ -22,11 +22,12 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
   const [role, setRole] = useState(null);            // 'admin' | 'editor'
   const [allowedZones, setAllowedZones] = useState('*'); // '*' | [] | ['AREVALO', ...]
 
-  const BACKEND_URL =
-    (typeof window !== 'undefined' && window.BACKEND_URL) ||
-    (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
-    (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
-    'https://cerro-largo-backend.onrender.com';
+  $1
+
+  // Orden fijo de zonas/municipios solicitado
+  const DESIRED_ZONE_ORDER = [
+    "ACEGUÁ","FRAILE MUERTO","RÍO BRANCO","TUPAMBAÉ","LAS CAÑAS","ISIDORO NOBLÍA","CERRO DE LAS CUENTAS","ARÉVALO","BAÑADO DE MEDINA","TRES ISLAS","LAGUNA MERÍN","CENTURIÓN","RAMÓN TRIGO","ARBOLITO","QUEBRACHO","PLÁCIDO ROSAS","Melo (GBA)","Melo (GBB)","Melo (GBC)","Melo (GCB)","Melo (GEB)"
+  ];
 
   // Helper: intenta parsear JSON; si viene HTML (<!doctype ...>) lanza error con snippet legible.
   const fetchJsonSafe = async (url, options = {}) => {
@@ -146,6 +147,8 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
             zonesArr = keys;
           }
         }
+        // Orden fijo solicitado
+        zonesArr = DESIRED_ZONE_ORDER.slice();
 
         // FILTRO por rol editor
         if (allowed && allowed !== '*' && Array.isArray(allowed) && allowed.length) {
@@ -167,8 +170,11 @@ const AdminPanel = ({ onZoneStateChange, zoneStates: zoneStatesProp = {}, zones:
         });
 
         Object.entries(statesMap).forEach(([name, st]) => {
-          if (!allowed || allowed === '*' || (Array.isArray(allowed) && allowed.map(canon).includes(canon(name)))) {
-            mapping[name] = normalizeToEs(st);
+          // Solo las zonas del orden solicitado
+          if ((zonesArr || []).includes(name)) {
+            if (!allowed || allowed === '*' || (Array.isArray(allowed) && allowed.map(canon).includes(canon(name)))) {
+              mapping[name] = normalizeToEs(st);
+            }
           }
         });
 
