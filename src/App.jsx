@@ -160,8 +160,8 @@ export default function App() {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
     const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0,200)}`);
-    if (!ct.includes('application/json')) throw new Error(`No-JSON: ${text.slice(0,200)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + text.slice(0,200));
+    if (!ct.includes('application/json')) throw new Error('No-JSON: ' + text.slice(0,200));
     return JSON.parse(text);
   };
 
