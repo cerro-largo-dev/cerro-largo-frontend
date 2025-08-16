@@ -22,7 +22,6 @@ export default function App() {
 
   // Panel “Info”
   const [infoOpen, setInfoOpen] = useState(false);
-  const [infoAnchorRect, setInfoAnchorRect] = useState(null);
   const infoBtnRef = useRef(null);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -141,19 +140,14 @@ export default function App() {
 
   const toggleInfo = () => {
     const btn = infoBtnRef.current;
-    if (btn) {
-      const rect = btn.getBoundingClientRect();
-      setInfoAnchorRect({
-        top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left,
-        width: rect.width, height: rect.height,
-      });
+    if (btn && reportAnchorRect) {
+      // usar misma posición que reportAnchorRect
+      setInfoOpen((v) => !v);
     }
-    setInfoOpen((v) => !v);
   };
 
   const closeInfoPanel = () => {
     setInfoOpen(false);
-    setInfoAnchorRect(null);
   };
 
   return (
@@ -190,14 +184,14 @@ export default function App() {
       />
 
       {/* FABs abajo-izquierda */}
-      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col gap-2">
+      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-start gap-2">
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
-        <ReportButton onLocationChange={handleUserLocationChange} />
+        <ReportButton ref={reportBtnRef} onLocationChange={handleUserLocationChange} />
       </div>
 
       {/* Paneles */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
-      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
+      <InfoPanel open={infoOpen} anchorRect={reportAnchorRect} onClose={closeInfoPanel} /> {/* mismo lugar que ReportHubPanel */}
 
       {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
