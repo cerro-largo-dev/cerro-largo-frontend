@@ -175,7 +175,10 @@ export default function App() {
       />
 
       {/* FAB Reportes ciudadanos (abajo-izquierda) */}
-      <ReportButton onLocationChange={handleUserLocationChange} />
+      <ReportButton onLocationChange={handleUserLocationChange} /> 
+
+       {/* Panel “Reporte” anclado al botón azul */}
+      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel}  />
 
       {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
@@ -187,10 +190,7 @@ export default function App() {
       <InfoPanel
         open={infoOpen}
         anchorRect={infoAnchorRect}
-        onClose={() => setInfoOpen(false)}
-
-      {/* Panel “Reporte” anclado al botón azul */}
-      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
+        onClose={closeInfoPanel}  />
 
       {/* Panel de administración solo en /admin */}
       {isAdminRoute && (
