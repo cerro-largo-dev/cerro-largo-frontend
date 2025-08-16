@@ -14,12 +14,12 @@ export default function App() {
   // Admin solo en /admin
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // NUEVO: estado del panel “Reporte” (anclado al botón junto a “Actualizar MAPA”)
+  // Panel “Reporte” (anclado al botón junto a “Actualizar Mapa”)
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
 
-  // Exponer BACKEND_URL global (mismo patrón que usas)
+  // Exponer BACKEND_URL global
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -113,7 +113,7 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // Toggle del panel “Reporte” (anclado al botón)
+  // Toggle panel “Reporte”
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) {
@@ -137,29 +137,29 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Barra superior de acciones: AQUÍ están “Actualizar MAPA” + “Reporte” */}
-      <div className="top-actions">
+      {/* Controles superiores: EXACTAMENTE donde estaban antes */}
+      <div className="fixed top-4 right-4 z-[1000] flex gap-2">
         <button
           type="button"
-          className="update-map-btn"
+          className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-green-700 disabled:opacity-50"
           onClick={handleRefreshZoneStates}
-          title="Actualizar MAPA"
+          title="Actualizar Mapa"
         >
-          Actualizar MAPA
+          🔄 Actualizar Mapa
         </button>
 
-        {/* MISMA FORMA/LUGAR del antiguo “Descargar reporte”: misma clase report-btn */}
+        {/* MISMA forma/estilo del botón previo */}
         <button
           type="button"
           ref={reportBtnRef}
-          className="report-btn"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50"
           onClick={toggleReportPanel}
           aria-haspopup="dialog"
           aria-expanded={reportOpen ? 'true' : 'false'}
           aria-controls="report-hub-panel"
           title="Reporte"
         >
-          Reporte
+          📄 Reporte
         </button>
       </div>
 
