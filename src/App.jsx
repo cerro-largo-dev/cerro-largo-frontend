@@ -3,6 +3,8 @@ import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
 import ReportButton from './components/Reportes/ReportButton';   // FAB Reportes ciudadanos (abajo-izq)
 import ReportHubPanel from './components/ReportHubPanel';         // Panel (Descargar / Suscribirme)
+import InfoButton from './components/InfoButton';      // ← NUEVO
+import InfoPanel from './components/InfoPanel';        // ← NUEVO
 import SiteBanner from './components/SiteBanner';
 import './App.css';
 
