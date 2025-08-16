@@ -202,7 +202,7 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
                 'shadow-sm'
               ].join(' ')}
             >
-              {downloading ? 'Generando…' : 'Descargar PDF'}
+              {downloading ? 'Generando…' : 'Descargar'}
             </button>
             <p className="text-[12px] leading-4 text-gray-600">
               Descargar PDF sobre los estados de alerta de Cerro Largo.
