@@ -1,3 +1,4 @@
+// src/components/ReportHubPanel.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 export default function ReportHubPanel({ open = false, anchorRect = null, onClose }) {
@@ -20,7 +21,7 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
   // Posicionamiento relativo al botón
   const panelRef = useRef(null);
   const phoneRef = useRef(null);
-  const [stylePos, setStylePos] = useState({ top: 56, right: 12 }); // fallback
+  const [stylePos, setStylePos] = useState({ top: 56, right: 12 });
 
   const computePosition = useCallback(() => {
     if (!anchorRect) return;
@@ -78,32 +79,31 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  // Picker estado
-  const [zoneQuery, setZoneQuery] = useState('');
-  const listRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) {
-      setSaving(false);
-      setDownloading(false);
-      setZoneQuery('');
-    }
-  }, [open]);
-
   const E164 = /^\+?[1-9]\d{6,14}$/;
 
-  const filteredZones = useMemo(() => {
-    const q = zoneQuery.trim().toLowerCase();
-    if (!q) return ZONE_ORDER;
-    return ZONE_ORDER.filter((z) => z.toLowerCase().includes(q));
-  }, [ZONE_ORDER, zoneQuery]);
+  // --- Seleccionar todo (checkbox tri-estado) ---
+  const allRef = useRef(null);
+  const allChecked = zones.length === ZONE_ORDER.length;
+  const noneChecked = zones.length === 0;
+
+  useEffect(() => {
+    if (!allRef.current) return;
+    allRef.current.indeterminate = !allChecked && !noneChecked;
+  }, [allChecked, noneChecked]);
+
+  const toggleAll = () => {
+    if (allChecked) {
+      setZones([]);
+    } else {
+      setZones(ZONE_ORDER.slice());
+    }
+  };
 
   const toggleZone = (z) => {
     setZones((prev) => (prev.includes(z) ? prev.filter((x) => x !== z) : [...prev, z]));
   };
 
-  const removeZone = (z) => setZones((prev) => prev.filter((x) => x !== z));
-
+  // --- Networking helpers ---
   const fetchJson = async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
@@ -146,7 +146,6 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
     }
     if (!Array.isArray(zones) || zones.length === 0) {
       alert('Selecciona al menos una zona.');
-      listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
     if (!consent) {
@@ -238,48 +237,26 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
               <span className="text-[11px] text-gray-500">Formato: +598…</span>
             </div>
 
-            {/* ZONAS — NUEVO: selector por checkboxes + chips (sin Ctrl) */}
-            <div className="flex flex-col gap-1" ref={listRef}>
-              <label className="text-xs text-gray-600" htmlFor="zone-search">Zonas / Municipios</label>
+            {/* ZONAS — SOLO CLICK, SIN BUSCADOR, SIN CHIPS */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-gray-600">Zonas / Municipios</label>
 
-              {/* Caja que muestra lo seleccionado como chips */}
-              <div className="border border-gray-300 rounded-md px-2 py-2 min-h-[46px]">
-                {zones.length === 0 ? (
-                  <span className="text-[11px] text-gray-500">Seleccioná una o más zonas…</span>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {zones.map((z) => (
-                      <span key={z} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs">
-                        {z}
-                        <button
-                          type="button"
-                          className="text-blue-600 hover:text-blue-800"
-                          aria-label={`Quitar ${z}`}
-                          onClick={() => removeZone(z)}
-                          title="Quitar"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Seleccionar todo */}
+              <label className="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-50 border border-gray-200">
+                <input
+                  ref={allRef}
+                  type="checkbox"
+                  className="accent-blue-600"
+                  checked={allChecked}
+                  onChange={toggleAll}
+                />
+                <span className="text-sm text-gray-800 select-none">Seleccionar todo</span>
+              </label>
 
-              {/* Buscador (opcional, útil en móvil) */}
-              <input
-                id="zone-search"
-                type="search"
-                placeholder="Buscar zona…"
-                value={zoneQuery}
-                onChange={(e) => setZoneQuery(e.target.value)}
-                className="mt-2 border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              />
-
-              {/* Lista de checkboxes (scrollable, accesible) */}
-              <div className="mt-2 max-h-40 overflow-auto pr-1 rounded-md border border-gray-200">
+              {/* Lista de checkboxes (scrollable) */}
+              <div className="max-h-44 overflow-auto pr-1 rounded-md border border-gray-200">
                 <ul className="divide-y divide-gray-100">
-                  {filteredZones.map((z) => {
+                  {ZONE_ORDER.map((z) => {
                     const checked = zones.includes(z);
                     return (
                       <li key={z} className="flex items-center gap-2 px-3 py-2">
@@ -296,15 +273,9 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
                       </li>
                     );
                   })}
-                  {filteredZones.length === 0 && (
-                    <li className="px-3 py-2 text-sm text-gray-500">Sin resultados</li>
-                  )}
                 </ul>
               </div>
-
-              <span className="text-[11px] text-gray-500">
-                Elegí con un clic (PC y móvil). Lo seleccionado aparece arriba y podés quitarlo con “×”.
-              </span>
+              <span className="text-[11px] text-gray-500">Elegí con un clic (PC y móvil). Podés marcar todas las zonas.</span>
             </div>
 
             {/* Consentimiento */}
