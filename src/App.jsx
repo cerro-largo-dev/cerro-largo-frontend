@@ -7,17 +7,20 @@ import SiteBanner from './components/SiteBanner';
 import './App.css';
 
 export default function App() {
-  const [zoneStates, setZoneStates] = useState({}); // { "ARÉVALO": "green", ... }
+  const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
 
-  // Admin solo en /admin
+  // Mostrar AdminPanel solo en /admin
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Panel “Reporte” (anclado al botón junto a “Actualizar Mapa”)
+  // Panel “Reporte” (anclado al botón junto a “Actualizar mapa”)
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
+
+  // Loading para feedback en “Actualizar mapa”
+  const [refreshing, setRefreshing] = useState(false);
 
   // Exponer BACKEND_URL global
   useEffect(() => {
@@ -82,21 +85,30 @@ export default function App() {
 
   // Callbacks de mapa/panel
   const handleZoneStateChange = (zoneName, newStateEn) => {
+    // Refleja el cambio inmediatamente en el mapa
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
 
   const handleRefreshZoneStates = useCallback(async () => {
+    setRefreshing(true);
     try {
       const data = await fetchJson(BACKEND_URL + '/api/admin/zones/states');
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
+          // El mapa espera 'green' | 'yellow' | 'red'
           mapping[name] = (info && info.state) || 'red';
         });
         setZoneStates(mapping);
+        // feedback en consola
+        console.info('Estados actualizados desde backend:', mapping);
+      } else {
+        console.warn('Respuesta inesperada al refrescar:', data);
       }
     } catch (e) {
       console.warn('No se pudo refrescar estados:', e.message);
+    } finally {
+      setRefreshing(false);
     }
   }, [BACKEND_URL, fetchJson]);
 
@@ -137,29 +149,41 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Controles superiores: EXACTAMENTE donde estaban antes */}
+      {/* Controles superiores: MISMAS DIMENSIONES, SIN EMOJIS, CON HOVER */}
       <div className="fixed top-4 right-4 z-[1000] flex gap-2">
         <button
           type="button"
-          className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-green-700 disabled:opacity-50"
           onClick={handleRefreshZoneStates}
-          title="Actualizar Mapa"
+          disabled={refreshing}
+          title="Actualizar mapa"
+          className={[
+            // mismas dimensiones para ambos
+            'h-11 min-w-[160px] px-4 rounded-xl shadow-lg font-semibold',
+            // color y hover
+            refreshing ? 'bg-green-500 cursor-wait' : 'bg-green-600 hover:bg-green-700',
+            'text-white transition-colors'
+          ].join(' ')}
         >
-          🔄 Actualizar Mapa
+          {refreshing ? 'Actualizando…' : 'Actualizar mapa'}
         </button>
 
-        {/* MISMA forma/estilo del botón previo */}
         <button
           type="button"
           ref={reportBtnRef}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50"
           onClick={toggleReportPanel}
           aria-haspopup="dialog"
           aria-expanded={reportOpen ? 'true' : 'false'}
           aria-controls="report-hub-panel"
           title="Reporte"
+          className={[
+            // mismas dimensiones que el de actualizar
+            'h-11 min-w-[160px] px-4 rounded-xl shadow-lg font-semibold',
+            // color y hover (mismo patrón de cambio de tono)
+            reportOpen ? 'bg-sky-700' : 'bg-sky-600 hover:bg-sky-700',
+            'text-white transition-colors'
+          ].join(' ')}
         >
-          📄 Reporte
+          Reporte
         </button>
       </div>
 
@@ -173,16 +197,16 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* Botón de Reportes ciudadanos (FAB abajo-izquierda) */}
+      {/* FAB Reportes ciudadanos (abajo-izquierda) */}
       <ReportButton onLocationChange={handleUserLocationChange} />
 
       {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
 
-      {/* Panel “Reporte” anclado al botón de arriba */}
+      {/* Panel “Reporte” anclado al botón */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
 
-      {/* Panel de administración solo en /admin */}
+      {/* Admin solo en /admin */}
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
