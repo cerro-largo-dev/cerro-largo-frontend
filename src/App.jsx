@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
-import ReportButton from './components/Reportes/ReportButton';   // FAB "Reportes ciudadanos"
-import ReportHubPanel from './components/ReportHubPanel';         // Panel (Descargar/Suscribirme)
+import ReportButton from './components/Reportes/ReportButton';   // FAB Reportes ciudadanos (abajo-izq)
+import ReportHubPanel from './components/ReportHubPanel';         // Panel (Descargar / Suscribirme)
 import SiteBanner from './components/SiteBanner';
 import './App.css';
 
@@ -11,18 +11,18 @@ export default function App() {
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
 
-  // Admin solo en /admin
+  // Mostrar AdminPanel solo en /admin
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Panel “Reporte”
+  // Panel “Reporte” (anclado al botón azul)
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
 
-  // Feedback para “Actualizar mapa”
+  // Feedback para “Actualizar Mapa”
   const [refreshing, setRefreshing] = useState(false);
 
-  // Publicar BACKEND_URL en window (respeta tus envs)
+  // Publicar BACKEND_URL en window (respeta tu VITE_REACT_APP_BACKEND_URL)
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -79,12 +79,13 @@ export default function App() {
     const ct = res.headers.get('content-type') || '';
     const text = await res.text();
     if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + text.slice(0, 200));
-    if (ct.indexOf('application/json') === -1) throw new Error('No-JSON: ' + text.slice(0, 200));
+    if (!ct.includes('application/json')) throw new Error('No-JSON: ' + text.slice(0, 200));
     try { return JSON.parse(text); } catch { return {}; }
   }, []);
 
-  // Callbacks
+  // Callbacks del mapa/panel
   const handleZoneStateChange = (zoneName, newStateEn) => {
+    // Reflejo inmediato en el mapa
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
 
@@ -95,7 +96,7 @@ export default function App() {
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
-          mapping[name] = (info && info.state) || 'red';
+          mapping[name] = (info && info.state) || 'red'; // green|yellow|red
         });
         setZoneStates(mapping);
       }
@@ -119,7 +120,7 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // Abrir/cerrar panel “Reporte” anclado al botón
+  // Toggle panel “Reporte” anclado al botón azul
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) {
@@ -138,37 +139,30 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
-      {/* CONTROLES SUPERIORES — MISMAS CLASES DE TU CSS, SIN EMOJIS */}
-      <div
-        className="button-group"
-        style={{ position: 'fixed', top: 10, right: 10, zIndex: 1000 }}
-      >
+    // Contenedor relativo para que el absolute funcione igual que en MapComponent
+    <div className="relative w-full h-screen">
+      {/* Botones de control — MISMAS CLASES (color/tamaño/forma) */}
+      <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
-          type="button"
-          className="update-btn"
           onClick={handleRefreshZoneStates}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-green-700 disabled:opacity-50"
           disabled={refreshing}
-          title="Actualizar mapa"
+          title="Actualizar Mapa"
         >
-          {refreshing ? 'Actualizando…' : 'Actualizar mapa'}
+          {refreshing ? 'Actualizando...' : 'Actualizar Mapa'}
         </button>
 
         <button
-          type="button"
           ref={reportBtnRef}
-          className="report-btn"
           onClick={toggleReportPanel}
-          aria-haspopup="dialog"
-          aria-expanded={reportOpen ? 'true' : 'false'}
-          aria-controls="report-hub-panel"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50"
           title="Reporte"
         >
           Reporte
         </button>
       </div>
 
-      {/* MAPA */}
+      {/* Mapa */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
@@ -184,10 +178,10 @@ export default function App() {
       {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
 
-      {/* Panel “Reporte” anclado al botón */}
+      {/* Panel “Reporte” anclado al botón azul */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
 
-      {/* Admin solo en /admin */}
+      {/* Panel de administración solo en /admin */}
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
