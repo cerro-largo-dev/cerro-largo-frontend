@@ -1,8 +1,7 @@
-// src/components/ReportHubPanel.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 export default function ReportHubPanel({ open = false, anchorRect = null, onClose }) {
-  // Backend URL (mismo patrón del proyecto)
+  // Backend URL (respeta tu env y window.BACKEND_URL)
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
     (typeof import.meta !== 'undefined' &&
@@ -18,10 +17,10 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
     return (p) => base + p;
   }, [BACKEND_URL]);
 
-  // Posicionamiento relativo al botón
+  // Posicionamiento relativo al botón (popover)
   const panelRef = useRef(null);
   const phoneRef = useRef(null);
-  const [stylePos, setStylePos] = useState({ top: 56, right: 12 });
+  const [stylePos, setStylePos] = useState({ top: 56, right: 12 }); // fallback
 
   const computePosition = useCallback(() => {
     if (!anchorRect) return;
@@ -59,14 +58,14 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
     };
   }, [open, onClose]);
 
-  // Foco inicial
+  // Foco inicial en teléfono
   useEffect(() => {
     if (!open) return;
-    const t = setTimeout(() => phoneRef.current?.focus(), 50);
+    const t = setTimeout(() => phoneRef.current?.focus(), 60);
     return () => clearTimeout(t);
   }, [open]);
 
-  // ---------- Formulario de suscripción ----------
+  // ---------- Formulario ----------
   const ZONE_ORDER = [
     'ACEGUÁ','FRAILE MUERTO','RÍO BRANCO','TUPAMBAÉ','LAS CAÑAS','ISIDORO NOBLÍA','CERRO DE LAS CUENTAS',
     'ARÉVALO','BAÑADO DE MEDINA','TRES ISLAS','LAGUNA MERÍN','CENTURIÓN','RAMÓN TRIGO','ARBOLITO',
@@ -74,36 +73,27 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
   ];
 
   const [phone, setPhone] = useState('');
-  const [zones, setZones] = useState([]); // seleccionadas
+  const [zones, setZones] = useState([]);       // seleccionadas
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const E164 = /^\+?[1-9]\d{6,14}$/;
-
-  // --- Seleccionar todo (checkbox tri-estado) ---
+  // “Seleccionar todo” (tri-estado)
   const allRef = useRef(null);
   const allChecked = zones.length === ZONE_ORDER.length;
   const noneChecked = zones.length === 0;
-
   useEffect(() => {
-    if (!allRef.current) return;
-    allRef.current.indeterminate = !allChecked && !noneChecked;
+    if (allRef.current) allRef.current.indeterminate = !allChecked && !noneChecked;
   }, [allChecked, noneChecked]);
 
-  const toggleAll = () => {
-    if (allChecked) {
-      setZones([]);
-    } else {
-      setZones(ZONE_ORDER.slice());
-    }
-  };
-
+  const toggleAll = () => setZones(allChecked ? [] : ZONE_ORDER.slice());
   const toggleZone = (z) => {
     setZones((prev) => (prev.includes(z) ? prev.filter((x) => x !== z) : [...prev, z]));
   };
 
-  // --- Networking helpers ---
+  // Validaciones/IO
+  const E164 = /^\+?[1-9]\d{6,14}$/;
+
   const fetchJson = async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
@@ -144,8 +134,8 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
       phoneRef.current?.focus();
       return;
     }
-    if (!Array.isArray(zones) || zones.length === 0) {
-      alert('Selecciona al menos una zona.');
+    if (zones.length === 0) {
+      alert('Seleccioná al menos una zona.');
       return;
     }
     if (!consent) {
@@ -181,7 +171,7 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
       aria-modal="true"
       aria-label="Panel de Reporte"
       ref={panelRef}
-      className="fixed z-[1001] w-[92vw] max-w-[360px] rounded-xl shadow-lg bg-white/95 backdrop-blur border border-gray-200"
+      className="fixed z-[1001] w-[90vw] max-w-[340px] rounded-xl shadow-lg bg-white/95 backdrop-blur border border-gray-200"
       style={{ top: stylePos.top, right: stylePos.right }}
     >
       {/* Encabezado */}
@@ -198,27 +188,31 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
       </div>
 
       {/* Contenido */}
-      <div className="p-4 space-y-4">
-        {/* Sección: Descargar PDF */}
-        <section className="rounded-lg border border-gray-200 p-3">
-          <h4 className="text-sm font-medium text-gray-800 mb-2">Descargar PDF</h4>
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={downloading}
-            className={[
-              'px-3 py-2 rounded-md text-white font-medium',
-              downloading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700',
-              'shadow-sm'
-            ].join(' ')}
-          >
-            {downloading ? 'Generando…' : 'Descargar reporte'}
-          </button>
+      <div className="p-3 space-y-3">
+        {/* Sección: Descargar PDF — sin título, texto breve a la derecha */}
+        <section className="rounded-lg border border-gray-200 p-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              className={[
+                'px-3 py-2 rounded-md text-white font-medium',
+                downloading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700',
+                'shadow-sm'
+              ].join(' ')}
+            >
+              {downloading ? 'Generando…' : 'Descargar PDF'}
+            </button>
+            <p className="text-[12px] leading-4 text-gray-600">
+              Descargar PDF sobre los estados de alerta de Cerro Largo.
+            </p>
+          </div>
         </section>
 
         {/* Sección: Suscribirme */}
-        <section className="rounded-lg border border-gray-200 p-3">
-          <h4 className="text-sm font-medium text-gray-800 mb-3">Suscribirme a alertas</h4>
+        <section className="rounded-lg border border-gray-200 p-2">
+          <h4 className="text-sm font-medium text-gray-800 mb-2">Suscribirme a alertas por WhatsApp</h4>
 
           <form onSubmit={handleSubscribe} className="space-y-3">
             {/* Teléfono */}
@@ -237,11 +231,10 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
               <span className="text-[11px] text-gray-500">Formato: +598…</span>
             </div>
 
-            {/* ZONAS — SOLO CLICK, SIN BUSCADOR, SIN CHIPS */}
+            {/* ZONAS — checkboxes con “Seleccionar todo” (lista más chica) */}
             <div className="flex flex-col gap-2">
               <label className="text-xs text-gray-600">Zonas / Municipios</label>
 
-              {/* Seleccionar todo */}
               <label className="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-50 border border-gray-200">
                 <input
                   ref={allRef}
@@ -250,16 +243,16 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
                   checked={allChecked}
                   onChange={toggleAll}
                 />
-                <span className="text-sm text-gray-800 select-none">Seleccionar todo</span>
+                <span className="text-sm text-gray-800 select-none">Seleccionar todas</span>
               </label>
 
-              {/* Lista de checkboxes (scrollable) */}
-              <div className="max-h-44 overflow-auto pr-1 rounded-md border border-gray-200">
+              {/* ↓↓↓ Altura reducida */}
+              <div className="max-h-36 overflow-auto pr-1 rounded-md border border-gray-200">
                 <ul className="divide-y divide-gray-100">
                   {ZONE_ORDER.map((z) => {
                     const checked = zones.includes(z);
                     return (
-                      <li key={z} className="flex items-center gap-2 px-3 py-2">
+                      <li key={z} className="flex items-center gap-2 px-3 py-1.5">
                         <input
                           id={`zone-${z}`}
                           type="checkbox"
@@ -275,7 +268,8 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
                   })}
                 </ul>
               </div>
-              <span className="text-[11px] text-gray-500">Elegí con un clic (PC y móvil). Podés marcar todas las zonas.</span>
+
+              <span className="text-[11px] text-gray-500">Elegí con un clic. “Seleccionar todas” marca/desmarca todo.</span>
             </div>
 
             {/* Consentimiento */}
@@ -313,3 +307,4 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
     </div>
   );
 }
+
