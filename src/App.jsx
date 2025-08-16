@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
-import ReportButton from './components/Reportes/ReportButton';   // FAB "Reportes ciudadanos" (abajo-izquierda)
-import ReportHubPanel from './components/ReportHubPanel';         // Panel popover (Descargar / Suscribirme)
+import ReportButton from './components/Reportes/ReportButton';   // FAB "Reportes ciudadanos"
+import ReportHubPanel from './components/ReportHubPanel';         // Panel (Descargar/Suscribirme)
 import SiteBanner from './components/SiteBanner';
 import './App.css';
 
@@ -11,18 +11,18 @@ export default function App() {
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
 
-  // Mostrar AdminPanel solo en /admin
+  // Admin solo en /admin
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Panel “Reporte” (anclado al botón junto a “Actualizar mapa”)
+  // Panel “Reporte”
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
 
-  // Loading para feedback en “Actualizar mapa”
+  // Feedback para “Actualizar mapa”
   const [refreshing, setRefreshing] = useState(false);
 
-  // Exponer BACKEND_URL global
+  // Publicar BACKEND_URL en window (respeta tus envs)
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -44,7 +44,7 @@ export default function App() {
     return String(be).replace(/\/$/, '');
   }, []);
 
-  // Detectar ruta /admin
+  // Detectar /admin
   useEffect(() => {
     const compute = () => {
       try {
@@ -73,7 +73,7 @@ export default function App() {
     );
   }, []);
 
-  // Utils
+  // Helper fetch JSON con credenciales
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
@@ -83,9 +83,8 @@ export default function App() {
     try { return JSON.parse(text); } catch { return {}; }
   }, []);
 
-  // Callbacks de mapa/panel
+  // Callbacks
   const handleZoneStateChange = (zoneName, newStateEn) => {
-    // Refleja el cambio inmediatamente en el mapa
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
 
@@ -96,14 +95,9 @@ export default function App() {
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
-          // El mapa espera 'green' | 'yellow' | 'red'
           mapping[name] = (info && info.state) || 'red';
         });
         setZoneStates(mapping);
-        // feedback en consola
-        console.info('Estados actualizados desde backend:', mapping);
-      } else {
-        console.warn('Respuesta inesperada al refrescar:', data);
       }
     } catch (e) {
       console.warn('No se pudo refrescar estados:', e.message);
@@ -125,18 +119,14 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // Toggle panel “Reporte”
+  // Abrir/cerrar panel “Reporte” anclado al botón
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) {
       const rect = btn.getBoundingClientRect();
       setReportAnchorRect({
-        top: rect.top,
-        right: rect.right,
-        bottom: rect.bottom,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
+        top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left,
+        width: rect.width, height: rect.height,
       });
     }
     setReportOpen((v) => !v);
@@ -149,20 +139,17 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Controles superiores: MISMAS DIMENSIONES, SIN EMOJIS, CON HOVER */}
-      <div className="fixed top-4 right-4 z-[1000] flex gap-2">
+      {/* CONTROLES SUPERIORES — MISMAS CLASES DE TU CSS, SIN EMOJIS */}
+      <div
+        className="button-group"
+        style={{ position: 'fixed', top: 10, right: 10, zIndex: 1000 }}
+      >
         <button
           type="button"
+          className="update-btn"
           onClick={handleRefreshZoneStates}
           disabled={refreshing}
           title="Actualizar mapa"
-          className={[
-            // mismas dimensiones para ambos
-            'h-11 min-w-[160px] px-4 rounded-xl shadow-lg font-semibold',
-            // color y hover
-            refreshing ? 'bg-green-500 cursor-wait' : 'bg-green-600 hover:bg-green-700',
-            'text-white transition-colors'
-          ].join(' ')}
         >
           {refreshing ? 'Actualizando…' : 'Actualizar mapa'}
         </button>
@@ -170,24 +157,18 @@ export default function App() {
         <button
           type="button"
           ref={reportBtnRef}
+          className="report-btn"
           onClick={toggleReportPanel}
           aria-haspopup="dialog"
           aria-expanded={reportOpen ? 'true' : 'false'}
           aria-controls="report-hub-panel"
           title="Reporte"
-          className={[
-            // mismas dimensiones que el de actualizar
-            'h-11 min-w-[160px] px-4 rounded-xl shadow-lg font-semibold',
-            // color y hover (mismo patrón de cambio de tono)
-            reportOpen ? 'bg-sky-700' : 'bg-sky-600 hover:bg-sky-700',
-            'text-white transition-colors'
-          ].join(' ')}
         >
           Reporte
         </button>
       </div>
 
-      {/* Mapa principal */}
+      {/* MAPA */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
