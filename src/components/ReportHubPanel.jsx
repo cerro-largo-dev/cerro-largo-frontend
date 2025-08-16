@@ -198,11 +198,11 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
               disabled={downloading}
               className={[
                 'px-3 py-2 rounded-md text-white font-medium',
-                downloading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700',
+                downloading ? 'bg-blue-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700',
                 'shadow-sm'
               ].join(' ')}
             >
-              {downloading ? 'Generando…' : 'Descargar'}
+              {downloading ? 'Descargar…' : 'Descargar'}
             </button>
             <p className="text-[12px] leading-4 text-gray-600">
               Descargar PDF sobre los estados de alerta de Cerro Largo.
