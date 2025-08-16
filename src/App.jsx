@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
-import ReportButton from './components/Reportes/ReportButton';   // FAB Reportes ciudadanos (abajo-izq)
-import ReportHubPanel from './components/ReportHubPanel';         // Panel (Descargar / Suscribirme)
-import InfoButton from './components/InfoButton';      // ← NUEVO
-import InfoPanel from './components/InfoPanel';        // ← NUEVO
+import ReportButton from './components/Reportes/ReportButton';
+import ReportHubPanel from './components/ReportHubPanel';
+import InfoButton from './components/InfoButton';
+import InfoPanel from './components/InfoPanel';
 import SiteBanner from './components/SiteBanner';
 import './App.css';
 
@@ -13,18 +13,21 @@ export default function App() {
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
 
-  // Mostrar AdminPanel solo en /admin
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // Panel “Reporte” (anclado al botón azul)
+  // Panel “Reporte”
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
 
-  // Feedback para “Actualizar Mapa”
+  // Panel “Info”
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoAnchorRect, setInfoAnchorRect] = useState(null);
+  const infoBtnRef = useRef(null);
+
   const [refreshing, setRefreshing] = useState(false);
 
-  // Publicar BACKEND_URL en window (respeta tu VITE_REACT_APP_BACKEND_URL)
+  // Publicar BACKEND_URL
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -75,7 +78,6 @@ export default function App() {
     );
   }, []);
 
-  // Helper fetch JSON con credenciales
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
@@ -85,9 +87,7 @@ export default function App() {
     try { return JSON.parse(text); } catch { return {}; }
   }, []);
 
-  // Callbacks del mapa/panel
   const handleZoneStateChange = (zoneName, newStateEn) => {
-    // Reflejo inmediato en el mapa
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
 
@@ -98,7 +98,7 @@ export default function App() {
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
-          mapping[name] = (info && info.state) || 'red'; // green|yellow|red
+          mapping[name] = (info && info.state) || 'red';
         });
         setZoneStates(mapping);
       }
@@ -122,7 +122,6 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // Toggle panel “Reporte” anclado al botón azul
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) {
@@ -140,10 +139,26 @@ export default function App() {
     setReportAnchorRect(null);
   };
 
+  const toggleInfo = () => {
+    const btn = infoBtnRef.current;
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      setInfoAnchorRect({
+        top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left,
+        width: rect.width, height: rect.height,
+      });
+    }
+    setInfoOpen((v) => !v);
+  };
+
+  const closeInfoPanel = () => {
+    setInfoOpen(false);
+    setInfoAnchorRect(null);
+  };
+
   return (
-    // Contenedor relativo para que el absolute funcione igual que en MapComponent
     <div className="relative w-full h-screen">
-      {/* Botones de control — MISMAS CLASES (color/tamaño/forma) */}
+      {/* Botones de control superior derecho */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
           onClick={handleRefreshZoneStates}
@@ -174,23 +189,18 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* FAB Reportes ciudadanos (abajo-izquierda) */}
-      <ReportButton onLocationChange={handleUserLocationChange} /> 
+      {/* FABs abajo-izquierda */}
+      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col gap-2">
+        <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
+        <ReportButton onLocationChange={handleUserLocationChange} />
+      </div>
 
-       {/* Panel “Reporte” anclado al botón azul */}
-      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel}  />
+      {/* Paneles */}
+      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
+      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
 
       {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
-
-       {/* ---- NUEVO: Botón Info arriba del de reporte --- */}
-      <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
-
-      {/* ---- NUEVO panel informativo ---- */}
-      <InfoPanel
-        open={infoOpen}
-        anchorRect={infoAnchorRect}
-        onClose={closeInfoPanel}  />
 
       {/* Panel de administración solo en /admin */}
       {isAdminRoute && (
