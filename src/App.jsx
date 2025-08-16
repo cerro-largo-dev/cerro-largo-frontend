@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
 import ReportButton from './components/Reportes/ReportButton';   // FAB "Reportes ciudadanos" (abajo-izquierda)
-import ReportHubButton from './components/ReportHubButton';       // ← NUEVO (arriba-derecha)
-import ReportHubPanel from './components/ReportHubPanel';         // ← NUEVO (popover debajo del botón)
-import SiteBanner from './components/SiteBanner';                 // Banner informativo (abajo-izquierda)
+import ReportHubPanel from './components/ReportHubPanel';         // Panel popover (Descargar / Suscribirme)
+import SiteBanner from './components/SiteBanner';
 import './App.css';
 
 export default function App() {
@@ -12,14 +11,15 @@ export default function App() {
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
 
-  // Mostrar AdminPanel solo en /admin
+  // Admin solo en /admin
   const [isAdminRoute, setIsAdminRoute] = useState(false);
 
-  // NUEVO: estado del panel "Reporte" (popover arriba-derecha)
+  // NUEVO: estado del panel “Reporte” (anclado al botón junto a “Actualizar MAPA”)
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportAnchorRect, setReportAnchorRect] = useState(null); // {top,right,bottom,left,width,height}
+  const [reportAnchorRect, setReportAnchorRect] = useState(null);
+  const reportBtnRef = useRef(null);
 
-  // Exponer la URL del backend a todo el front (mismo patrón que venimos usando)
+  // Exponer BACKEND_URL global (mismo patrón que usas)
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -30,7 +30,6 @@ export default function App() {
     if (typeof window !== 'undefined') window.BACKEND_URL = String(be).replace(/\/$/, '');
   }, []);
 
-  // Helper para obtener el backend sin barra final
   const BACKEND_URL = useMemo(() => {
     const be =
       (typeof window !== 'undefined' && window.BACKEND_URL) ||
@@ -42,12 +41,11 @@ export default function App() {
     return String(be).replace(/\/$/, '');
   }, []);
 
-  // Detectar si la ruta actual es /admin
+  // Detectar ruta /admin
   useEffect(() => {
     const compute = () => {
       try {
-        const path =
-          (typeof window !== 'undefined' && window.location && window.location.pathname) || '';
+        const path = (typeof window !== 'undefined' && window.location && window.location.pathname) || '';
         setIsAdminRoute(/^\/admin\/?$/.test(path));
       } catch {
         setIsAdminRoute(false);
@@ -58,7 +56,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', compute);
   }, []);
 
-  // Geolocalización con fallback (no bloquea UI)
+  // Geolocalización con fallback
   useEffect(() => {
     const FALLBACK = { lat: -32.3667, lng: -54.1667 };
     if (!navigator.geolocation) {
@@ -72,7 +70,7 @@ export default function App() {
     );
   }, []);
 
-  // ---- Utils JSON fetch con credenciales ----
+  // Utils
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
@@ -82,9 +80,8 @@ export default function App() {
     try { return JSON.parse(text); } catch { return {}; }
   }, []);
 
-  // ---- Callbacks que usan mapa y panel ----
+  // Callbacks de mapa/panel
   const handleZoneStateChange = (zoneName, newStateEn) => {
-    // Actualiza de inmediato para reflejar en el mapa sin recargar
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
 
@@ -116,11 +113,11 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // ---- Nuevo: manejo del botón "Reporte" (arriba-derecha) ----
-  const handleToggleReport = useCallback((isOpen, rect) => {
-    setReportOpen(isOpen);
-    if (isOpen && rect) {
-      // guardamos solo lo necesario del DOMRect
+  // Toggle del panel “Reporte” (anclado al botón)
+  const toggleReportPanel = () => {
+    const btn = reportBtnRef.current;
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
       setReportAnchorRect({
         top: rect.top,
         right: rect.right,
@@ -129,18 +126,43 @@ export default function App() {
         width: rect.width,
         height: rect.height,
       });
-    } else {
-      setReportAnchorRect(null);
     }
-  }, []);
+    setReportOpen((v) => !v);
+  };
 
-  const handleCloseReport = useCallback(() => {
+  const closeReportPanel = () => {
     setReportOpen(false);
     setReportAnchorRect(null);
-  }, []);
+  };
 
   return (
     <div className="app-container">
+      {/* Barra superior de acciones: AQUÍ están “Actualizar MAPA” + “Reporte” */}
+      <div className="top-actions">
+        <button
+          type="button"
+          className="update-map-btn"
+          onClick={handleRefreshZoneStates}
+          title="Actualizar MAPA"
+        >
+          Actualizar MAPA
+        </button>
+
+        {/* MISMA FORMA/LUGAR del antiguo “Descargar reporte”: misma clase report-btn */}
+        <button
+          type="button"
+          ref={reportBtnRef}
+          className="report-btn"
+          onClick={toggleReportPanel}
+          aria-haspopup="dialog"
+          aria-expanded={reportOpen ? 'true' : 'false'}
+          aria-controls="report-hub-panel"
+          title="Reporte"
+        >
+          Reporte
+        </button>
+      </div>
+
       {/* Mapa principal */}
       <MapComponent
         zones={zones}
@@ -154,12 +176,11 @@ export default function App() {
       {/* Botón de Reportes ciudadanos (FAB abajo-izquierda) */}
       <ReportButton onLocationChange={handleUserLocationChange} />
 
-      {/* Banner informativo (abajo, se alinea con el FAB existente) */}
+      {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
 
-      {/* NUEVO: Botón "Reporte" (arriba-derecha) y su panel */}
-      <ReportHubButton open={reportOpen} onToggle={handleToggleReport} />
-      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={handleCloseReport} />
+      {/* Panel “Reporte” anclado al botón de arriba */}
+      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
 
       {/* Panel de administración solo en /admin */}
       {isAdminRoute && (
