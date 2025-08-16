@@ -178,6 +178,15 @@ export default function App() {
       {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
 
+       {/* ---- NUEVO: Botón Info arriba del de reporte --- */}
+      <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
+
+      {/* ---- NUEVO panel informativo ---- */}
+      <InfoPanel
+        open={infoOpen}
+        anchorRect={infoAnchorRect}
+        onClose={() => setInfoOpen(false)}
+
       {/* Panel “Reporte” anclado al botón azul */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
 
