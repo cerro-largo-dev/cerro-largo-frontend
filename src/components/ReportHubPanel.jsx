@@ -1,19 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
-/**
- * Panel “Reporte” (popover)
- * - Se abre DEBAJO del botón "Reporte" (arriba-derecha).
- * - Secciones:
- *    1) Descargar PDF → GET /api/report/download  (credentials:'include')
- *    2) Suscribirme   → POST /api/notify/subscribe (stub)
- * - Accesibilidad: role="dialog" aria-modal, cierra con Esc y click-outside,
- *   foco inicial en el input teléfono.
- *
- * Props:
- *  - open: boolean
- *  - anchorRect: DOMRect del botón al momento de abrir (para posicionar)
- *  - onClose: function()
- */
 export default function ReportHubPanel({ open = false, anchorRect = null, onClose }) {
   // Backend URL (mismo patrón del proyecto)
   const BACKEND_URL =
@@ -38,8 +24,6 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
 
   const computePosition = useCallback(() => {
     if (!anchorRect) return;
-    // Queremos alinear el borde derecho del panel con el del botón,
-    // y situarlo un poco por debajo.
     const gap = 8;
     const top = Math.max(8, Math.round(anchorRect.bottom + gap));
     const right = Math.max(8, Math.round(window.innerWidth - anchorRect.right));
@@ -61,9 +45,7 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
   // Cerrar con Escape y click-outside
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.();
-    };
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     const onClickOutside = (e) => {
       if (!panelRef.current) return;
       if (!panelRef.current.contains(e.target)) onClose?.();
@@ -78,42 +60,49 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
 
   // Foco inicial
   useEffect(() => {
-    if (open) {
-      // pequeño delay para asegurar render
-      const t = setTimeout(() => phoneRef.current?.focus(), 50);
-      return () => clearTimeout(t);
-    }
+    if (!open) return;
+    const t = setTimeout(() => phoneRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [open]);
 
   // ---------- Formulario de suscripción ----------
   const ZONE_ORDER = [
-    'ACEGUÁ', 'FRAILE MUERTO', 'RÍO BRANCO', 'TUPAMBAÉ', 'LAS CAÑAS', 'ISIDORO NOBLÍA',
-    'CERRO DE LAS CUENTAS', 'ARÉVALO', 'BAÑADO DE MEDINA', 'TRES ISLAS', 'LAGUNA MERÍN',
-    'CENTURIÓN', 'RAMÓN TRIGO', 'ARBOLITO', 'QUEBRACHO', 'PLÁCIDO ROSAS',
-    'Melo (GBA)', 'Melo (GBB)', 'Melo (GBC)', 'Melo (GCB)', 'Melo (GEB)'
+    'ACEGUÁ','FRAILE MUERTO','RÍO BRANCO','TUPAMBAÉ','LAS CAÑAS','ISIDORO NOBLÍA','CERRO DE LAS CUENTAS',
+    'ARÉVALO','BAÑADO DE MEDINA','TRES ISLAS','LAGUNA MERÍN','CENTURIÓN','RAMÓN TRIGO','ARBOLITO',
+    'QUEBRACHO','PLÁCIDO ROSAS','Melo (GBA)','Melo (GBB)','Melo (GBC)','Melo (GCB)','Melo (GEB)'
   ];
 
   const [phone, setPhone] = useState('');
-  const [zones, setZones] = useState([]);
+  const [zones, setZones] = useState([]); // seleccionadas
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  // Picker estado
+  const [zoneQuery, setZoneQuery] = useState('');
+  const listRef = useRef(null);
+
   useEffect(() => {
     if (!open) {
-      // reset suave al cerrar
       setSaving(false);
       setDownloading(false);
+      setZoneQuery('');
     }
   }, [open]);
 
   const E164 = /^\+?[1-9]\d{6,14}$/;
 
-  const handleZonesChange = (e) => {
-    const opts = Array.from(e.target.options || []);
-    const selected = opts.filter((o) => o.selected).map((o) => o.value);
-    setZones(selected);
+  const filteredZones = useMemo(() => {
+    const q = zoneQuery.trim().toLowerCase();
+    if (!q) return ZONE_ORDER;
+    return ZONE_ORDER.filter((z) => z.toLowerCase().includes(q));
+  }, [ZONE_ORDER, zoneQuery]);
+
+  const toggleZone = (z) => {
+    setZones((prev) => (prev.includes(z) ? prev.filter((x) => x !== z) : [...prev, z]));
   };
+
+  const removeZone = (z) => setZones((prev) => prev.filter((x) => x !== z));
 
   const fetchJson = async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
@@ -150,14 +139,14 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
 
   const handleSubscribe = async (e) => {
     e?.preventDefault?.();
-    // Validaciones
     if (!E164.test(phone)) {
-      alert('Teléfono inválido. Formato E.164 (ej: +598...).');
+      alert('Teléfono inválido. Formato E.164 (ej: +598…).');
       phoneRef.current?.focus();
       return;
     }
     if (!Array.isArray(zones) || zones.length === 0) {
       alert('Selecciona al menos una zona.');
+      listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
     if (!consent) {
@@ -176,7 +165,6 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
       });
       if (!resp?.success) throw new Error(resp?.message || 'No se pudo guardar la suscripción');
       alert('Recibido, te avisamos cuando habilitemos WhatsApp.');
-      // limpia parcialmente
       setConsent(false);
     } catch (e2) {
       alert('No se pudo guardar, reintente. ' + e2.message);
@@ -203,11 +191,7 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-bold">R</span>
           <h3 className="font-semibold text-gray-800">Reporte</h3>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Cerrar panel"
-          className="p-1 rounded hover:bg-gray-100"
-        >
+        <button onClick={onClose} aria-label="Cerrar panel" className="p-1 rounded hover:bg-gray-100">
           <svg className="h-5 w-5 text-gray-600" viewBox="0 0 24 24" stroke="currentColor" fill="none">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18 18 6M6 6l12 12" />
           </svg>
@@ -254,21 +238,73 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
               <span className="text-[11px] text-gray-500">Formato: +598…</span>
             </div>
 
-            {/* Zonas (múltiple) */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600" htmlFor="sub-zones">Zonas / Municipios</label>
-              <select
-                id="sub-zones"
-                multiple
-                value={zones}
-                onChange={handleZonesChange}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 h-28"
-              >
-                {ZONE_ORDER.map((z) => (
-                  <option key={z} value={z}>{z}</option>
-                ))}
-              </select>
-              <span className="text-[11px] text-gray-500">Seleccioná una o más zonas (Ctrl/Cmd para multi-selección).</span>
+            {/* ZONAS — NUEVO: selector por checkboxes + chips (sin Ctrl) */}
+            <div className="flex flex-col gap-1" ref={listRef}>
+              <label className="text-xs text-gray-600" htmlFor="zone-search">Zonas / Municipios</label>
+
+              {/* Caja que muestra lo seleccionado como chips */}
+              <div className="border border-gray-300 rounded-md px-2 py-2 min-h-[46px]">
+                {zones.length === 0 ? (
+                  <span className="text-[11px] text-gray-500">Seleccioná una o más zonas…</span>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {zones.map((z) => (
+                      <span key={z} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs">
+                        {z}
+                        <button
+                          type="button"
+                          className="text-blue-600 hover:text-blue-800"
+                          aria-label={`Quitar ${z}`}
+                          onClick={() => removeZone(z)}
+                          title="Quitar"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Buscador (opcional, útil en móvil) */}
+              <input
+                id="zone-search"
+                type="search"
+                placeholder="Buscar zona…"
+                value={zoneQuery}
+                onChange={(e) => setZoneQuery(e.target.value)}
+                className="mt-2 border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              {/* Lista de checkboxes (scrollable, accesible) */}
+              <div className="mt-2 max-h-40 overflow-auto pr-1 rounded-md border border-gray-200">
+                <ul className="divide-y divide-gray-100">
+                  {filteredZones.map((z) => {
+                    const checked = zones.includes(z);
+                    return (
+                      <li key={z} className="flex items-center gap-2 px-3 py-2">
+                        <input
+                          id={`zone-${z}`}
+                          type="checkbox"
+                          className="accent-blue-600"
+                          checked={checked}
+                          onChange={() => toggleZone(z)}
+                        />
+                        <label htmlFor={`zone-${z}`} className="text-sm text-gray-800 select-none flex-1">
+                          {z}
+                        </label>
+                      </li>
+                    );
+                  })}
+                  {filteredZones.length === 0 && (
+                    <li className="px-3 py-2 text-sm text-gray-500">Sin resultados</li>
+                  )}
+                </ul>
+              </div>
+
+              <span className="text-[11px] text-gray-500">
+                Elegí con un clic (PC y móvil). Lo seleccionado aparece arriba y podés quitarlo con “×”.
+              </span>
             </div>
 
             {/* Consentimiento */}
@@ -296,11 +332,7 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
                 {saving ? 'Guardando…' : 'Guardar'}
               </button>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-sm text-gray-600 hover:text-gray-800"
-              >
+              <button type="button" onClick={onClose} className="text-sm text-gray-600 hover:text-gray-800">
                 Cancelar
               </button>
             </div>
