@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import React, { useState, forwardRef } from 'react';
 
-export default function ReportButton({ onClick, onLocationChange }) {
+const ReportButton = forwardRef(({ onClick, onLocationChange }, ref) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleClick = () => {
@@ -12,6 +12,7 @@ export default function ReportButton({ onClick, onLocationChange }) {
 
   return (
     <button
+      ref={ref}
       onClick={handleClick}
       className="h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-none cursor-pointer report-fab"
       aria-label="Crear un nuevo reporte"
@@ -28,5 +29,7 @@ export default function ReportButton({ onClick, onLocationChange }) {
       )}
     </button>
   );
-}
+});
+
+export default ReportButton;
 
