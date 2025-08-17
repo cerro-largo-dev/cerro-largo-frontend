@@ -197,13 +197,14 @@ export default function App() {
         }}
       >
         {/* InfoButton arriba - AHORA CON isOpen PROP */}
-                        <InfoButton 
+                    <InfoButton 
               ref={infoBtnRef} 
               onClick={(e) => {
                 e.stopPropagation(); // Detiene la propagación del evento
                 toggleInfo();
               }} 
               isOpen={infoOpen}
+            />
         
         {/* ReportButton abajo */}
         <ReportButton 
