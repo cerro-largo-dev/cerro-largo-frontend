@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
+const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
   const [formData, setFormData] = useState({
     description: '',
     placeName: '',
@@ -14,7 +14,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
 
   // Obtener geolocalización al abrir el modal
   useEffect(() => {
-    if (isOpen) {
+    if (open) {
       // Solo obtener ubicación si no la tenemos ya
       if (!formData.latitude || !formData.longitude) {
         setLocationError('');
@@ -22,7 +22,7 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
       }
     }
     // NO limpiar la ubicación cuando se cierra el modal para mantener el marcador visible
-  }, [isOpen, onLocationChange])
+  }, [open, onLocationChange])
 
   const getLocation = () => {
     setIsLoadingLocation(true)
@@ -191,10 +191,58 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
     }
   }
 
-  if (!isOpen) return null
+  if (!open) return null
+
+  // Calcular posición del modal basado en el botón FAB
+  const getModalPosition = () => {
+    // Posición por defecto (al lado del botón FAB)
+    let position = {
+      position: 'fixed',
+      bottom: '1.5rem', // 24px
+      left: '6rem', // 96px - al lado del botón FAB
+      zIndex: 1000
+    };
+
+    // Si tenemos anchorRect, usar esa información para posicionar mejor
+    if (anchorRect) {
+      const modalWidth = 384; // max-w-md = 384px
+      const modalHeight = 600; // altura estimada del modal
+      const padding = 16;
+
+      // Calcular posición a la derecha del botón
+      let leftPos = anchorRect.right + padding;
+      let bottomPos = window.innerHeight - anchorRect.bottom;
+
+      // Verificar si el modal se sale de la pantalla por la derecha
+      if (leftPos + modalWidth > window.innerWidth) {
+        // Posicionar a la izquierda del botón si no cabe a la derecha
+        leftPos = anchorRect.left - modalWidth - padding;
+        
+        // Si tampoco cabe a la izquierda, centrar horizontalmente
+        if (leftPos < 0) {
+          leftPos = (window.innerWidth - modalWidth) / 2;
+        }
+      }
+
+      // Verificar si el modal se sale de la pantalla por arriba
+      if (bottomPos + modalHeight > window.innerHeight) {
+        bottomPos = padding;
+      }
+
+      position.left = `${Math.max(padding, leftPos)}px`;
+      position.bottom = `${Math.max(padding, bottomPos)}px`;
+    }
+
+    return position;
+  };
+
+  const modalStyle = getModalPosition();
 
   return (
-    <div className="fixed inset-0 z-[1001] flex items-center justify-center p-4 bg-black bg-opacity-50">
+    <div 
+      className="p-4"
+      style={modalStyle}
+    >
       <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
         <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
           <h3 className="text-lg font-semibold">Reportar Estado</h3>
