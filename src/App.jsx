@@ -188,7 +188,7 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* FABs abajo-izquierda con posicionamiento mejorado para móviles */}
+      {/* FABs abajo-izquierda - REORGANIZADOS: Info arriba, Reporte abajo */}
       <div 
         className="fixed z-[1000] flex flex-col items-start gap-4"
         style={{
@@ -196,12 +196,15 @@ export default function App() {
           left: 'max(1rem, env(safe-area-inset-left, 1rem))'
         }}
       >
+        {/* InfoButton arriba */}
+        <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
+        
+        {/* ReportButton abajo */}
         <ReportButton 
           ref={reportFabRef}
           onClick={handleToggleReportModal}
           onLocationChange={handleUserLocationChange}
         />
-        <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
       </div>
 
       {/* Paneles y Modales */}
