@@ -14,12 +14,7 @@ const ReportButton = forwardRef(({ onClick, onLocationChange }, ref) => {
     <button
       ref={ref}
       onClick={handleClick}
-      className="fixed bottom-4 left-4 h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-none cursor-pointer report-fab z-[1000] safe-area-inset-bottom"
-      style={{
-        // Asegurar que el botón esté visible en pantallas móviles
-        bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))',
-        left: 'max(1rem, env(safe-area-inset-left, 1rem))'
-      }}
+      className="h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center border-none cursor-pointer report-fab"
       aria-label="Crear un nuevo reporte"
       title="Crear Reporte"
     >
