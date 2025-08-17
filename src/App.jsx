@@ -188,19 +188,18 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* FABs abajo-izquierda con posicionamiento mejorado para móviles */}
-      <div 
-        className="fixed z-[1000] flex flex-col items-start gap-4"
-        style={{
-          bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))',
-          left: 'max(1rem, env(safe-area-inset-left, 1rem))'
-        }}
-      >
-        <ReportButton 
-          ref={reportFabRef}
-          onClick={handleToggleReportModal}
-          onLocationChange={handleUserLocationChange}
-        />
+ {/* FABs abajo-izquierda - Removido el contenedor absolute para que ReportButton use fixed */}
+      <ReportButton 
+        ref={reportFabRef}
+        onClick={handleToggleReportModal}
+        onLocationChange={handleUserLocationChange}
+      />
+      
+      {/* InfoButton con posicionamiento mejorado */}
+      <div className="fixed bottom-20 left-4 z-[1000]" style={{
+        bottom: 'max(5rem, calc(env(safe-area-inset-bottom, 1rem) + 4rem))',
+        left: 'max(1rem, env(safe-area-inset-left, 1rem))'
+      }}>
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
       </div>
 
