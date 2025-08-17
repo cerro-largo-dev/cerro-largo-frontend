@@ -3,8 +3,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // Importación de componentes
 import MapComponent from './components/MapComponent';
 import AdminPanel from './components/AdminPanel';
-import ReportButton from './components/Reportes/ReportButton'; // Asegúrate que la ruta es correcta
-import ReportModal from './components/Reportes/ReportModal';   // Asegúrate que la ruta es correcta
+import ReportButton from './components/Reportes/ReportButton';
+import ReportModal from './components/Reportes/ReportModal';
 import ReportHubPanel from './components/ReportHubPanel';
 import InfoButton from './components/InfoButton';
 import InfoPanel from './components/InfoPanel';
@@ -30,7 +30,7 @@ export default function App() {
   const [infoAnchorRect, setInfoAnchorRect] = useState(null);
   const infoBtnRef = useRef(null);
 
-  // --- NUEVO: Estado para el modal de reporte del FAB ---
+  // Estado para el modal de reporte del FAB
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
   // Publicar BACKEND_URL
@@ -41,7 +41,7 @@ export default function App() {
       (typeof process !== 'undefined' && process.env &&
         (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       'https://cerro-largo-backend.onrender.com';
-    if (typeof window !== 'undefined' ) window.BACKEND_URL = String(be).replace(/\/$/, '');
+    if (typeof window !== 'undefined') window.BACKEND_URL = String(be).replace(/\/$/, '');
   }, []);
 
   const BACKEND_URL = useMemo(() => {
@@ -52,7 +52,7 @@ export default function App() {
       (typeof process !== 'undefined' && process.env &&
         (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       'https://cerro-largo-backend.onrender.com';
-    return String(be ).replace(/\/$/, '');
+    return String(be).replace(/\/$/, '');
   }, []);
 
   // Detectar /admin
@@ -128,8 +128,7 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // --- Funciones para los paneles y modales ---
-
+  // Funciones para los paneles y modales
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) setReportAnchorRect(btn.getBoundingClientRect());
@@ -146,7 +145,6 @@ export default function App() {
 
   const closeInfoPanel = () => setInfoOpen(false);
 
-  // --- NUEVA: Función para abrir/cerrar el modal de reporte del FAB ---
   const handleToggleReportModal = () => {
     setReportModalOpen((prev) => !prev);
   };
@@ -184,18 +182,18 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* --- CORREGIDO: FABs abajo-izquierda --- */}
+      {/* FABs abajo-izquierda */}
       <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-start gap-4">
-        {/* El orden visual es vertical: ReportButton arriba, InfoButton abajo */}
-        <ReportButton onClick={handleToggleReportModal} />
+        <ReportButton 
+          onClick={handleToggleReportModal}
+          onLocationChange={handleUserLocationChange}
+        />
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
       </div>
 
       {/* Paneles y Modales */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
       <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
-      
-      {/* --- NUEVO: Renderizado del modal de reporte --- */}
       <ReportModal
         isOpen={reportModalOpen}
         onClose={handleToggleReportModal}
@@ -216,3 +214,4 @@ export default function App() {
     </div>
   );
 }
+
