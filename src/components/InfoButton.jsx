@@ -29,9 +29,11 @@ const InfoButton = forwardRef(({ onClick, isOpen = false }, ref) => {
           stroke="currentColor"
           strokeWidth="2"
         >
-          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-          <circle cx="12" cy="11" r="1" fill="currentColor" />
-          <path d="M12 14v-2" strokeWidth="2.5" />
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m0 0V11a1 1 0 011-1h2a1 1 0 011 1v10m3 0a1 1 0 001-1V10m0 0l2 2m-2-2l7-7"
+          />
         </svg>
       )}
     </button>
