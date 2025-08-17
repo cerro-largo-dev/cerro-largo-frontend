@@ -126,10 +126,7 @@ export default function App() {
     const btn = reportBtnRef.current;
     if (btn) {
       const rect = btn.getBoundingClientRect();
-      setReportAnchorRect({
-        top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left,
-        width: rect.width, height: rect.height,
-      });
+      setReportAnchorRect({ top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height });
     }
     setReportOpen((v) => !v);
   };
@@ -143,10 +140,7 @@ export default function App() {
     const btn = infoBtnRef.current;
     if (btn) {
       const rect = btn.getBoundingClientRect();
-      setInfoAnchorRect({
-        top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left,
-        width: rect.width, height: rect.height,
-      });
+      setInfoAnchorRect({ top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height });
     }
     setInfoOpen((v) => !v);
   };
@@ -190,7 +184,7 @@ export default function App() {
       />
 
       {/* FABs abajo-izquierda */}
-      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col gap-2">
+      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-center gap-4">
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
         <ReportButton onLocationChange={handleUserLocationChange} />
       </div>
@@ -199,10 +193,10 @@ export default function App() {
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
       <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
 
-      {/* Banner informativo (abajo-izquierda) */}
+      {/* Banner informativo */}
       <SiteBanner />
 
-      {/* Panel de administración solo en /admin */}
+      {/* Panel de administración */}
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
