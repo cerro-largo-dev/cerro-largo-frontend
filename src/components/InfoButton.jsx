@@ -5,7 +5,7 @@ const InfoButton = forwardRef(({ onClick }, ref) => {
     <button
       ref={ref}
       onClick={onClick}
-      className="w-14 h-14 bg-grey-600 hover:bg-grey-700 text-white rounded-full shadow-lg flex items-center justify-center focus:outline-none"
+      className="w-14 h-14 bg-blue-400 hover:bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center focus:outline-none"
       title="Información"
       aria-label="Información"
     >
