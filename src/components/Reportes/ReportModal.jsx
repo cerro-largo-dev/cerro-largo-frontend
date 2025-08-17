@@ -193,13 +193,13 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
 
   if (!open) return null
 
-  // Calcular posición del modal basado en el botón FAB
+  // Calcular posición del modal basado en el botón FAB de reporte (que ahora está abajo)
   const getModalPosition = () => {
-    // Posición por defecto (al lado del botón FAB)
+    // Posición por defecto similar al InfoPanel pero para el botón de reporte
     let position = {
       position: 'fixed',
-      bottom: '1.5rem', // 24px
-      left: '6rem', // 96px - al lado del botón FAB
+      bottom: '1rem', // Alineado con el botón de reporte que está abajo
+      left: '5.25rem', // 84px - al lado del botón FAB (similar al InfoPanel)
       zIndex: 1000
     };
 
@@ -218,19 +218,18 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
         // Posicionar a la izquierda del botón si no cabe a la derecha
         leftPos = anchorRect.left - modalWidth - padding;
         
-        // Si tampoco cabe a la izquierda, centrar horizontalmente
+        // Si tampoco cabe a la izquierda, usar posición por defecto
         if (leftPos < 0) {
-          leftPos = (window.innerWidth - modalWidth) / 2;
+          leftPos = 84; // 5.25rem en px
         }
       }
 
-      // Verificar si el modal se sale de la pantalla por arriba
-      if (bottomPos + modalHeight > window.innerHeight) {
-        bottomPos = padding;
-      }
+      // Asegurar que el modal esté alineado con el botón de reporte (no arriba)
+      // El botón de reporte ahora está en la parte inferior, así que el modal debe estar al lado
+      bottomPos = Math.max(padding, window.innerHeight - anchorRect.bottom);
 
       position.left = `${Math.max(padding, leftPos)}px`;
-      position.bottom = `${Math.max(padding, bottomPos)}px`;
+      position.bottom = `${bottomPos}px`;
     }
 
     return position;
