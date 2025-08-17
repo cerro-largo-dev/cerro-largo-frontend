@@ -32,7 +32,6 @@ export default function App() {
 
   // Estado para el modal de reporte del FAB
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
   // Publicar BACKEND_URL
@@ -148,8 +147,6 @@ export default function App() {
   const closeInfoPanel = () => setInfoOpen(false);
 
   const handleToggleReportModal = () => {
-    const btn = reportFabRef.current;
-    if (btn) setReportModalAnchorRect(btn.getBoundingClientRect());
     setReportModalOpen((prev) => !prev);
   };
 
@@ -188,7 +185,7 @@ export default function App() {
         userLocation={userLocation}
       />
 
- {/* FABs abajo-izquierda - Removido el contenedor absolute para que ReportButton use fixed */}
+      {/* FABs abajo-izquierda - Removido el contenedor absolute para que ReportButton use fixed */}
       <ReportButton 
         ref={reportFabRef}
         onClick={handleToggleReportModal}
@@ -207,8 +204,7 @@ export default function App() {
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
       <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
       <ReportModal
-        open={reportModalOpen}
-        anchorRect={reportModalAnchorRect}
+        isOpen={reportModalOpen}
         onClose={closeReportModal}
         onLocationChange={handleUserLocationChange}
       />
@@ -227,5 +223,4 @@ export default function App() {
     </div>
   );
 }
-
 
