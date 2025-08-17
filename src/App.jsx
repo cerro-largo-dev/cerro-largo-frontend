@@ -183,11 +183,11 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* FABs abajo-izquierda */}
-      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-center gap-4">
-        <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
-        <ReportButton onLocationChange={handleUserLocationChange} />
-      </div>
+    {/* FABs abajo-izquierda */}
+<div className="absolute bottom-4 left-4 z-[1000] flex flex-row items-end gap-4">
+  <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
+  <ReportButton onLocationChange={handleUserLocationChange} />
+</div>
 
       {/* Paneles */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
