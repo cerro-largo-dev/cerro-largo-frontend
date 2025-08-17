@@ -1,19 +1,10 @@
-import React, { useState, forwardRef } from 'react';
+import React, { forwardRef } from 'react';
 
-const InfoButton = forwardRef(({ onClick }, ref) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const handleClick = () => {
-    if (onClick) {
-      onClick();
-    }
-    setIsOpen(prev => !prev);
-  };
-
+const InfoButton = forwardRef(({ onClick, isOpen = false }, ref) => {
   return (
     <button
       ref={ref}
-      onClick={handleClick}
+      onClick={onClick}
       className="w-14 h-14 bg-blue-400 hover:bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center focus:outline-none transition-colors duration-200"
       title={isOpen ? "Cerrar información" : "Información"}
       aria-label={isOpen ? "Cerrar información" : "Información"}
