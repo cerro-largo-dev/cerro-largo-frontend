@@ -185,6 +185,8 @@ export default function App() {
 
     {/* FABs abajo-izquierda */}
  <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-start gap-4">
+        {/* Ahora ninguno de los dos componentes tiene posicionamiento propio,
+            así que Flexbox los ordenará en una columna vertical. */}
         <ReportButton onLocationChange={handleUserLocationChange} />
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
       </div>
