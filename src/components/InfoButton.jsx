@@ -5,7 +5,7 @@ const InfoButton = forwardRef(({ onClick, isOpen = false }, ref) => {
     <button
       ref={ref}
       onClick={onClick}
-      className="w-14 h-14 bg-blue-400 hover:bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center focus:outline-none transition-colors duration-200"
+      className="w-14 h-14 bg-blue-300 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center focus:outline-none transition-colors duration-200"
       title={isOpen ? "Cerrar información" : "Información"}
       aria-label={isOpen ? "Cerrar información" : "Información"}
     >
