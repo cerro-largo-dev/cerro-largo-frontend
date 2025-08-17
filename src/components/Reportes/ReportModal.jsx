@@ -145,12 +145,12 @@ const ReportModal = ({ isOpen, onClose, onLocationChange }) => {
         formDataToSend.append('fotos', photo)
       })
 
-// Enviar al backend
-const backendUrl = 'https://cerro-largo-backend.onrender.com/';
-const response = await fetch(`${backendUrl}/api/reportes`, {
-  method: 'POST',
-  body: formDataToSend
-});
+      // Enviar al backend
+      const backendUrl = 'https://cerro-largo-backend.onrender.com/';
+      const response = await fetch(`${backendUrl}/api/reportes`, {
+        method: 'POST',
+        body: formDataToSend
+      });
 
       if (response.ok) {
         const result = await response.json()
@@ -194,8 +194,16 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
   if (!isOpen) return null
 
   return (
-    <div className="absolute bottom-6 left-24 z-[1000] p-4">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
+    <div 
+      className="fixed inset-0 z-[1050] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm" 
+      onClick={handleClose} 
+      role="dialog" 
+      aria-modal="true"
+    >
+      <div 
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border m-4" 
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
           <h3 className="text-lg font-semibold">Reportar Estado</h3>
           <button
@@ -365,5 +373,5 @@ const response = await fetch(`${backendUrl}/api/reportes`, {
   )
 }
 
-
 export default ReportModal
+
