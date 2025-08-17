@@ -77,7 +77,7 @@ function MapComponent({
   const [currentZoom, setCurrentZoom] = useState(9);
   const mapRef = useRef(null);
 
-  const mapCenter = [-32.55, -54.0];
+  const mapCenter = [-32.35, -54.20];
 
   const handleZoomChange = (newZoom) => setCurrentZoom(newZoom);
 
