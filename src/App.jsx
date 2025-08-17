@@ -196,8 +196,12 @@ export default function App() {
           left: 'max(1rem, env(safe-area-inset-left, 1rem))'
         }}
       >
-        {/* InfoButton arriba */}
-        <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
+        {/* InfoButton arriba - AHORA CON isOpen */}
+        <InfoButton 
+          ref={infoBtnRef} 
+          onClick={toggleInfo} 
+          isOpen={infoOpen}
+        />
         
         {/* ReportButton abajo */}
         <ReportButton 
