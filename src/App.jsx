@@ -32,7 +32,6 @@ export default function App() {
 
   // Estado para el modal de reporte del FAB
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
   // Publicar BACKEND_URL
@@ -148,8 +147,6 @@ export default function App() {
   const closeInfoPanel = () => setInfoOpen(false);
 
   const handleToggleReportModal = () => {
-    const btn = reportFabRef.current;
-    if (btn) setReportModalAnchorRect(btn.getBoundingClientRect());
     setReportModalOpen((prev) => !prev);
   };
 
@@ -188,13 +185,18 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* FABs abajo-izquierda */}
-      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-start gap-4">
-        <ReportButton 
-          ref={reportFabRef}
-          onClick={handleToggleReportModal}
-          onLocationChange={handleUserLocationChange}
-        />
+      {/* FABs abajo-izquierda - Removido el contenedor absolute para que ReportButton use fixed */}
+      <ReportButton 
+        ref={reportFabRef}
+        onClick={handleToggleReportModal}
+        onLocationChange={handleUserLocationChange}
+      />
+      
+      {/* InfoButton con posicionamiento mejorado */}
+      <div className="fixed bottom-20 left-4 z-[1000]" style={{
+        bottom: 'max(5rem, calc(env(safe-area-inset-bottom, 1rem) + 4rem))',
+        left: 'max(1rem, env(safe-area-inset-left, 1rem))'
+      }}>
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
       </div>
 
@@ -202,8 +204,7 @@ export default function App() {
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
       <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
       <ReportModal
-        open={reportModalOpen}
-        anchorRect={reportModalAnchorRect}
+        isOpen={reportModalOpen}
         onClose={closeReportModal}
         onLocationChange={handleUserLocationChange}
       />
