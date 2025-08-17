@@ -117,8 +117,8 @@ export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
 
         {/* Pie con logos */}
         <div className="pt-2 border-t flex justify-between">
-          <img src="/logos/gobcerro.png" alt="Gob Cerro Largo" className="h-7" />
-          <img src="/logos/inumet_logo_transparente.png" alt="INUMET" className="h-7" />
+         <img src="/gobcerro.png" alt="Gob Cerro Largo" className="h-7" />
+          <img src="/inumet_logo_transparente.png" alt="INUMET" className="h-7" />
         </div>
       </div>
     </div>
