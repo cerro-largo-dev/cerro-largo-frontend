@@ -14,28 +14,29 @@ import SiteBanner from './components/SiteBanner';
 import './App.css';
 
 export default function App() {
-  // Estados existentes
+  // Estados para datos y UI
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [isAdminRoute, setIsAdminRoute] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Estados para paneles y modales
-  const [reportOpen, setReportOpen] = useState(false); // Para el panel de "Reporte" superior
+  // Estados y referencias para paneles y modales
+  const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
 
-  const [infoOpen, setInfoOpen] = useState(false); // Para el panel de "Info"
+  const [infoOpen, setInfoOpen] = useState(false);
   const [infoAnchorRect, setInfoAnchorRect] = useState(null);
-  const infoBtnRef = useRef(null);
+  const infoBtnRef = useRef(null); // Referencia para el botón de Información
 
-  // Estado para el modal de reporte del FAB
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
-  // Publicar BACKEND_URL
+  // --- Lógica de inicialización y datos ---
+
+  // Publicar BACKEND_URL en el objeto window
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -43,7 +44,7 @@ export default function App() {
       (typeof process !== 'undefined' && process.env &&
         (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       'https://cerro-largo-backend.onrender.com';
-    if (typeof window !== 'undefined') window.BACKEND_URL = String(be).replace(/\/$/, '');
+    if (typeof window !== 'undefined' ) window.BACKEND_URL = String(be).replace(/\/$/, '');
   }, []);
 
   const BACKEND_URL = useMemo(() => {
@@ -54,14 +55,14 @@ export default function App() {
       (typeof process !== 'undefined' && process.env &&
         (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       'https://cerro-largo-backend.onrender.com';
-    return String(be).replace(/\/$/, '');
+    return String(be ).replace(/\/$/, '');
   }, []);
 
-  // Detectar /admin
+  // Detectar si la ruta es /admin
   useEffect(() => {
     const compute = () => {
       try {
-        const path = (typeof window !== 'undefined' && window.location && window.location.pathname) || '';
+        const path = (typeof window !== 'undefined' && window.location?.pathname) || '';
         setIsAdminRoute(/^\/admin\/?$/.test(path));
       } catch {
         setIsAdminRoute(false);
@@ -72,9 +73,9 @@ export default function App() {
     return () => window.removeEventListener('popstate', compute);
   }, []);
 
-  // Geolocalización con fallback
+  // Obtener geolocalización del usuario con un fallback
   useEffect(() => {
-    const FALLBACK = { lat: -32.3667, lng: -54.1667 };
+    const FALLBACK = { lat: -32.3667, lng: -54.1667 }; // Coordenadas de Melo
     if (!navigator.geolocation) {
       setUserLocation(FALLBACK);
       return;
@@ -86,12 +87,14 @@ export default function App() {
     );
   }, []);
 
+  // --- Handlers y funciones ---
+
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: 'include', ...options });
     const ct = res.headers.get('content-type') || '';
     const text = await res.text();
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText + ': ' + text.slice(0, 200));
-    if (!ct.includes('application/json')) throw new Error('No-JSON: ' + text.slice(0, 200));
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
+    if (!ct.includes('application/json')) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
     try { return JSON.parse(text); } catch { return {}; }
   }, []);
 
@@ -102,11 +105,11 @@ export default function App() {
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
-      const data = await fetchJson(BACKEND_URL + '/api/admin/zones/states');
+      const data = await fetchJson(`${BACKEND_URL}/api/admin/zones/states`);
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
-          mapping[name] = (info && info.state) || 'red';
+          mapping[name] = info?.state || 'red';
         });
         setZoneStates(mapping);
       }
@@ -130,13 +133,12 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // Funciones para los paneles y modales
+  // Funciones para abrir/cerrar paneles y modales
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) setReportAnchorRect(btn.getBoundingClientRect());
     setReportOpen((v) => !v);
   };
-
   const closeReportPanel = () => setReportOpen(false);
 
   const toggleInfo = () => {
@@ -144,7 +146,6 @@ export default function App() {
     if (btn) setInfoAnchorRect(btn.getBoundingClientRect());
     setInfoOpen((v) => !v);
   };
-
   const closeInfoPanel = () => setInfoOpen(false);
 
   const handleToggleReportModal = () => {
@@ -152,7 +153,6 @@ export default function App() {
     if (btn) setReportModalAnchorRect(btn.getBoundingClientRect());
     setReportModalOpen((prev) => !prev);
   };
-
   const closeReportModal = () => setReportModalOpen(false);
 
   return (
@@ -171,14 +171,14 @@ export default function App() {
         <button
           ref={reportBtnRef}
           onClick={toggleReportPanel}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700"
           title="Reporte"
         >
           Reporte
         </button>
       </div>
 
-      {/* Mapa */}
+      {/* Componente principal del Mapa */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
@@ -188,7 +188,7 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* FABs abajo-izquierda - REORGANIZADOS: Info arriba, Reporte abajo */}
+      {/* Botones Flotantes (FABs) abajo a la izquierda */}
       <div 
         className="fixed z-[1000] flex flex-col items-start gap-4"
         style={{
@@ -196,17 +196,12 @@ export default function App() {
           left: 'max(1rem, env(safe-area-inset-left, 1rem))'
         }}
       >
-        {/* InfoButton arriba - AHORA CON isOpen PROP */}
-                    <InfoButton 
-              ref={infoBtnRef} 
-              onClick={(e) => {
-                e.stopPropagation(); // Detiene la propagación del evento
-                toggleInfo();
-              }} 
-              isOpen={infoOpen}
-            />
+        <InfoButton 
+          ref={infoBtnRef} 
+          onClick={toggleInfo} 
+          isOpen={infoOpen}
+        />
         
-        {/* ReportButton abajo */}
         <ReportButton 
           ref={reportFabRef}
           onClick={handleToggleReportModal}
@@ -214,9 +209,16 @@ export default function App() {
         />
       </div>
 
-      {/* Paneles y Modales */}
+      {/* Paneles y Modales que se renderizan condicionalmente */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
-      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
+      
+      <InfoPanel 
+        open={infoOpen} 
+        anchorRect={infoAnchorRect} 
+        onClose={closeInfoPanel}
+        buttonRef={infoBtnRef}  // <-- Aquí se pasa la referencia al panel
+      />
+      
       <ReportModal
         open={reportModalOpen}
         anchorRect={reportModalAnchorRect}
@@ -224,10 +226,10 @@ export default function App() {
         onLocationChange={handleUserLocationChange}
       />
 
-      {/* Banner informativo */}
+      {/* Banner informativo en la parte inferior */}
       <SiteBanner />
 
-      {/* Panel de administración */}
+      {/* Panel de administración (solo visible en la ruta /admin) */}
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
@@ -238,4 +240,3 @@ export default function App() {
     </div>
   );
 }
-
