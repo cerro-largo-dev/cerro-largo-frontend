@@ -74,7 +74,7 @@ function MapComponent({
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [currentZoom, setCurrentZoom] = useState(9);
+  const [currentZoom, setCurrentZoom] = useState(8);
   const mapRef = useRef(null);
 
   const mapCenter = [-32.35, -54.20];
