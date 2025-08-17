@@ -20,13 +20,13 @@ export default function App() {
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
 
-  // Panel Info
+  // Panel “Info”
   const [infoOpen, setInfoOpen] = useState(false);
-  const [infoAnchorRect, setInfoAnchorRect] = useState(null);
   const infoBtnRef = useRef(null);
 
   const [refreshing, setRefreshing] = useState(false);
 
+  // Publicar BACKEND_URL
   useEffect(() => {
     const be =
       (typeof import.meta !== 'undefined' && import.meta.env &&
@@ -121,7 +121,6 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // Toggle panel “Reporte”
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) {
@@ -139,27 +138,21 @@ export default function App() {
     setReportAnchorRect(null);
   };
 
-  // Toggle panel Info
-  const toggleInfoPanel = () => {
+  const toggleInfo = () => {
     const btn = infoBtnRef.current;
-    if (btn) {
-      const rect = btn.getBoundingClientRect();
-      setInfoAnchorRect({
-        top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left,
-        width: rect.width, height: rect.height,
-      });
+    if (btn && reportAnchorRect) {
+      // usar misma posición que reportAnchorRect
+      setInfoOpen((v) => !v);
     }
-    setInfoOpen((v) => !v);
   };
 
   const closeInfoPanel = () => {
     setInfoOpen(false);
-    setInfoAnchorRect(null);
   };
 
   return (
     <div className="relative w-full h-screen">
-      {/* Botón Actualizar */}
+      {/* Botones de control superior derecho */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
           onClick={handleRefreshZoneStates}
@@ -168,6 +161,15 @@ export default function App() {
           title="Actualizar Mapa"
         >
           {refreshing ? 'Actualizando...' : 'Actualizar Mapa'}
+        </button>
+
+        <button
+          ref={reportBtnRef}
+          onClick={toggleReportPanel}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50"
+          title="Reporte"
+        >
+          Reporte
         </button>
       </div>
 
@@ -181,20 +183,20 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* Contenedor botones flotantes (Report + Info) */}
-      <div className="fixed bottom-6 left-4 z-[999] flex flex-col gap-4 items-start">
-        <InfoButton ref={infoBtnRef} onClick={toggleInfoPanel} />
+      {/* FABs abajo-izquierda */}
+      <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-start gap-2">
+        <InfoButton ref={infoBtnRef} onClick={toggleInfo} />
         <ReportButton ref={reportBtnRef} onLocationChange={handleUserLocationChange} />
       </div>
 
       {/* Paneles */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
-      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
+      <InfoPanel open={infoOpen} anchorRect={reportAnchorRect} onClose={closeInfoPanel} /> {/* mismo lugar que ReportHubPanel */}
 
-      {/* Banner */}
+      {/* Banner informativo (abajo-izquierda) */}
       <SiteBanner />
 
-      {/* Admin */}
+      {/* Panel de administración solo en /admin */}
       {isAdminRoute && (
         <AdminPanel
           onRefreshZoneStates={handleRefreshZoneStates}
