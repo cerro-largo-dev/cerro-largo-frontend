@@ -1,53 +1,83 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
+/**
+ * Componente InfoPanel que muestra información en un panel flotante.
+ * @param {object} props
+ * @param {boolean} props.open - Controla si el panel está visible.
+ * @param {DOMRect} props.anchorRect - La posición del botón que ancla el panel.
+ * @param {Function} props.onClose - Función para cerrar el panel.
+ * @param {React.RefObject} props.buttonRef - Referencia al botón que abre/cierra el panel.
+ */
+export default function InfoPanel({ open = false, anchorRect = null, onClose, buttonRef }) {
   const panelRef = useRef(null);
-  const [stylePos, setStylePos] = useState({ bottom: 84, left: 16 }); // fallback
-  const [openAccordion, setOpenAccordion] = useState(null); // Estado para controlar qué acordeón está abierto
+  const [stylePos, setStylePos] = useState({ bottom: 84, left: 16 }); // Posición de fallback
+  const [openAccordion, setOpenAccordion] = useState(null); // Controla qué acordeón está abierto
 
-  // Función para manejar la apertura/cierre de acordeones
+  // Función para manejar la apertura/cierre de los acordeones internos
   const toggleAccordion = (accordionId) => {
     setOpenAccordion(openAccordion === accordionId ? null : accordionId);
   };
 
-  // Posición → al costado derecho del botón
+  // Calcula la posición del panel al costado derecho del botón de anclaje
   const computePos = useCallback(() => {
     if (!anchorRect) return;
-    const gap = 12;
+    const gap = 12; // Espacio entre el botón y el panel
     const left = Math.round(anchorRect.right + gap);
     const bottom = Math.round(window.innerHeight - anchorRect.bottom);
     setStylePos({ left, bottom });
   }, [anchorRect]);
 
+  // Efecto para recalcular la posición cuando el panel se abre o la ventana cambia de tamaño
   useEffect(() => {
     if (!open) return;
     computePos();
     const onResize = () => computePos();
     window.addEventListener('resize', onResize);
-    window.addEventListener('scroll', onResize, { passive:true });
+    window.addEventListener('scroll', onResize, { passive: true });
     return () => {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('scroll', onResize);
     };
   }, [open, computePos]);
 
-  // Escape + click-outside
+  // Efecto para manejar el cierre del panel (tecla Escape y clic fuera)
   useEffect(() => {
     if (!open) return;
-    const onKey = e => { if (e.key === 'Escape') onClose?.(); };
-    const onClickO = e => {
-      if (!panelRef.current) return;
-      if (!panelRef.current.contains(e.target)) onClose?.();
+
+    // Cierra con la tecla 'Escape'
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
     };
+
+    // Cierra al hacer clic fuera del panel Y fuera del botón que lo abre
+    const onClickOutside = (e) => {
+      // Si el clic fue dentro del panel, no hagas nada
+      if (panelRef.current && panelRef.current.contains(e.target)) {
+        return;
+      }
+      // Si el clic fue en el botón que abre el panel, no hagas nada
+      if (buttonRef?.current && buttonRef.current.contains(e.target)) {
+        return;
+      }
+      // Si el clic fue en cualquier otro lugar, cierra el panel
+      onClose?.();
+    };
+
     document.addEventListener('keydown', onKey);
-    document.addEventListener('mousedown', onClickO);
+    document.addEventListener('mousedown', onClickOutside); // Usar mousedown para capturar el evento antes que otros 'click'
+
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onClickO);
+      document.removeEventListener('mousedown', onClickOutside);
     };
-  }, [open, onClose]);
+  }, [open, onClose, buttonRef]); // Dependencias del efecto
 
-  if (!open) return null;
+  // Si el panel no está abierto, no renderizar nada
+  if (!open) {
+    return null;
+  }
 
   return (
     <div
@@ -58,6 +88,7 @@ export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
       className="fixed z-[999] bg-white/95 backdrop-blur w-[300px] max-w-[90vw] rounded-xl border border-gray-200 shadow-lg"
       style={{ bottom: stylePos.bottom, left: stylePos.left }}
     >
+      {/* Cabecera del panel */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-gray-800">Información</h3>
@@ -74,124 +105,133 @@ export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
         </button>
       </div>
 
+      {/* Contenido del panel con acordeones */}
       <div className="p-3 text-sm space-y-2 text-gray-800">
+        {/* Acordeón 1: Beneficios */}
         <div className="border rounded-md">
           <button 
             className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('beneficios')}
+            aria-expanded={openAccordion === 'beneficios'}
           >
             1. Beneficios y Seguridad
             <svg 
               className={`h-4 w-4 transition-transform ${openAccordion === 'beneficios' ? 'rotate-180' : ''}`} 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {openAccordion === 'beneficios' && (
-            <ul className="list-disc list-inside px-4 pb-3">
-              <li>Mejora conectividad rural y seguridad vial.</li>
-              <li>Reduce costos logísticos y prevenís cortes.</li>
-              <li>Optimiza planificación entre sectores productivos.</li>
-            </ul>
+            <div className="px-4 pb-3">
+              <ul className="list-disc list-inside">
+                <li>Mejora conectividad rural y seguridad vial.</li>
+                <li>Reduce costos logísticos y prevenís cortes.</li>
+                <li>Optimiza planificación entre sectores productivos.</li>
+              </ul>
+            </div>
           )}
         </div>
 
+        {/* Acordeón 2: Funcionamiento */}
         <div className="border rounded-md">
           <button 
             className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('funcionamiento')}
+            aria-expanded={openAccordion === 'funcionamiento'}
           >
             2. Cómo Funciona
             <svg 
               className={`h-4 w-4 transition-transform ${openAccordion === 'funcionamiento' ? 'rotate-180' : ''}`} 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {openAccordion === 'funcionamiento' && (
-            <ul className="list-disc list-inside px-4 pb-3">
-              <li>Reportes ciudadanos de caminos.</li>
-              <li>Pluviómetros e integración automática.</li>
-              <li>Alertas por color: verde, amarillo, rojo.</li>
-              <li>Administrador puede validar o anular alertas.</li>
-            </ul>
+            <div className="px-4 pb-3">
+              <ul className="list-disc list-inside">
+                <li>Reportes ciudadanos de caminos.</li>
+                <li>Pluviómetros e integración automática.</li>
+                <li>Alertas por color: verde, amarillo, rojo.</li>
+                <li>Administrador puede validar o anular alertas.</li>
+              </ul>
+            </div>
           )}
         </div>
 
+        {/* Acordeón 3: Pluviometría */}
         <div className="border rounded-md">
           <button 
             className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('pluviometria')}
+            aria-expanded={openAccordion === 'pluviometria'}
           >
             3. Pluviometría y Alertas
             <svg 
               className={`h-4 w-4 transition-transform ${openAccordion === 'pluviometria' ? 'rotate-180' : ''}`} 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {openAccordion === 'pluviometria' && (
-            <ul className="list-disc list-inside px-4 pb-3">
-              <li>Verde = habilitado; Amarillo = precaución (2–5 mm/h); Rojo = cierre (&gt;5 mm/h).</li>
-              <li>Acumulados 48 h avalan cierres automáticos.</li>
-              <li>Sin lluvias 12 h → se desactiva alerta.</li>
-            </ul>
+            <div className="px-4 pb-3">
+              <ul className="list-disc list-inside">
+                <li>Verde = habilitado; Amarillo = precaución (2–5 mm/h); Rojo = cierre (&gt;5 mm/h).</li>
+                <li>Acumulados 48 h avalan cierres automáticos.</li>
+                <li>Sin lluvias 12 h → se desactiva alerta.</li>
+              </ul>
+            </div>
           )}
         </div>
 
+        {/* Acordeón 4: Instituciones */}
         <div className="border rounded-md">
           <button 
             className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('instituciones')}
+            aria-expanded={openAccordion === 'instituciones'}
           >
             4. Instituciones y Alianzas
             <svg 
               className={`h-4 w-4 transition-transform ${openAccordion === 'instituciones' ? 'rotate-180' : ''}`} 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {openAccordion === 'instituciones' && (
-            <ul className="list-disc list-inside px-4 pb-3">
-              <li>Gobierno Departamental de Cerro Largo.</li>
-              <li>INUMET – Datos y soporte técnico.</li>
-              <li>Productores agropecuarios.</li>
-              <li>UPM / LUMIN / MINERVA / COLEME / ACA.</li>
-              <li>Transportistas &amp; camioneros.</li>
-              <li>MTOP / OPP / FDI (apoyo institucional).</li>
-            </ul>
+            <div className="px-4 pb-3">
+              <ul className="list-disc list-inside">
+                <li>Gobierno Departamental de Cerro Largo.</li>
+                <li>INUMET – Datos y soporte técnico.</li>
+                <li>Productores agropecuarios.</li>
+                <li>UPM / LUMIN / MINERVA / COLEME / ACA.</li>
+                <li>Transportistas &amp; camioneros.</li>
+                <li>MTOP / OPP / FDI (apoyo institucional).</li>
+              </ul>
+            </div>
           )}
         </div>
 
+        {/* Acordeón 5: Contacto */}
         <div className="border rounded-md">
           <button 
             className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('contacto')}
+            aria-expanded={openAccordion === 'contacto'}
           >
             5. Contacto – Intendencia de Cerro Largo
             <svg 
               className={`h-4 w-4 transition-transform ${openAccordion === 'contacto' ? 'rotate-180' : ''}`} 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {openAccordion === 'contacto' && (
-            <div className="px-4 pb-3">
+            <div className="px-4 pb-3 space-y-1">
               <p><strong>Dirección:</strong> General Justino Muniz 591, Melo.</p>
               <p><strong>Teléfonos:</strong> +598 4642 6551 al 58</p>
               <p><strong>Facebook:</strong> Gobierno de Cerro Largo</p>
@@ -201,7 +241,7 @@ export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
 
         {/* Pie con logos */}
         <div className="pt-2 border-t flex justify-center">
-          <img src="/gobcerro.png" alt="Gob Cerro Largo" className="h-10" />
+          <img src="/gobcerro.png" alt="Logo del Gobierno de Cerro Largo" className="h-10" />
         </div>
       </div>
     </div>
