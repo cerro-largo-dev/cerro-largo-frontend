@@ -196,7 +196,7 @@ export default function App() {
           left: 'max(1rem, env(safe-area-inset-left, 1rem))'
         }}
       >
-        {/* InfoButton arriba - AHORA CON isOpen */}
+        {/* InfoButton arriba - AHORA CON isOpen PROP */}
         <InfoButton 
           ref={infoBtnRef} 
           onClick={toggleInfo} 
