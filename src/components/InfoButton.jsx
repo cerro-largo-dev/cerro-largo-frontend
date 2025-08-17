@@ -5,9 +5,9 @@ const InfoButton = forwardRef(({ onClick, isOpen = false }, ref) => {
     <button
       ref={ref}
       onClick={onClick}
-      className="w-14 h-14 bg-blue-300 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center focus:outline-none"
-      title={isOpen ? "Cerrar información" : "Inicio / Información"}
-      aria-label={isOpen ? "Cerrar información" : "Inicio / Información"}
+      className="w-14 h-14 bg-blue-400 hover:bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center focus:outline-none"
+      title={isOpen ? "Cerrar información" : "Información"}
+      aria-label={isOpen ? "Cerrar información" : "Información"}
     >
       {isOpen ? (
         <svg
@@ -29,8 +29,9 @@ const InfoButton = forwardRef(({ onClick, isOpen = false }, ref) => {
           stroke="currentColor"
           strokeWidth="2"
         >
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9,22 9,12 15,12 15,22" />
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+          <circle cx="12" cy="11" r="1" fill="currentColor" />
+          <path d="M12 14v-2" strokeWidth="2.5" />
         </svg>
       )}
     </button>
