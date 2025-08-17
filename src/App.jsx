@@ -32,6 +32,8 @@ export default function App() {
 
   // Estado para el modal de reporte del FAB
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
+  const reportFabRef = useRef(null);
 
   // Publicar BACKEND_URL
   useEffect(() => {
@@ -146,8 +148,12 @@ export default function App() {
   const closeInfoPanel = () => setInfoOpen(false);
 
   const handleToggleReportModal = () => {
+    const btn = reportFabRef.current;
+    if (btn) setReportModalAnchorRect(btn.getBoundingClientRect());
     setReportModalOpen((prev) => !prev);
   };
+
+  const closeReportModal = () => setReportModalOpen(false);
 
   return (
     <div className="relative w-full h-screen">
@@ -185,6 +191,7 @@ export default function App() {
       {/* FABs abajo-izquierda */}
       <div className="absolute bottom-4 left-4 z-[1000] flex flex-col items-start gap-4">
         <ReportButton 
+          ref={reportFabRef}
           onClick={handleToggleReportModal}
           onLocationChange={handleUserLocationChange}
         />
@@ -195,8 +202,9 @@ export default function App() {
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
       <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} />
       <ReportModal
-        isOpen={reportModalOpen}
-        onClose={handleToggleReportModal}
+        open={reportModalOpen}
+        anchorRect={reportModalAnchorRect}
+        onClose={closeReportModal}
         onLocationChange={handleUserLocationChange}
       />
 
