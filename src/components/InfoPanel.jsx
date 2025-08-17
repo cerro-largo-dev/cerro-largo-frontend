@@ -3,6 +3,12 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
   const panelRef = useRef(null);
   const [stylePos, setStylePos] = useState({ bottom: 84, left: 16 }); // fallback
+  const [openAccordion, setOpenAccordion] = useState(null); // Estado para controlar qué acordeón está abierto
+
+  // Función para manejar la apertura/cierre de acordeones
+  const toggleAccordion = (accordionId) => {
+    setOpenAccordion(openAccordion === accordionId ? null : accordionId);
+  };
 
   // Posición → al costado derecho del botón
   const computePos = useCallback(() => {
@@ -53,7 +59,10 @@ export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
       style={{ bottom: stylePos.bottom, left: stylePos.left }}
     >
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-800">Información</h3>
+        <div>
+          <h3 className="font-semibold text-gray-800">Información</h3>
+          <p className="text-xs text-gray-600 mt-1">Plataforma digital que permite monitorear, reportar y gestionar en tiempo real el estado de los caminos rurales.</p>
+        </div>
         <button
           aria-label="Cerrar"
           className="p-1 rounded hover:bg-gray-100"
@@ -66,59 +75,133 @@ export default function InfoPanel({ open=false, anchorRect=null, onClose }) {
       </div>
 
       <div className="p-3 text-sm space-y-2 text-gray-800">
-        <details className="border rounded-md">
-          <summary className="px-3 py-2 font-medium cursor-pointer">1. Beneficios y Seguridad</summary>
-          <ul className="list-disc list-inside px-4 pb-3">
-            <li>Mejora conectividad rural y seguridad vial.</li>
-            <li>Reduce costos logísticos y prevenís cortes.</li>
-            <li>Optimiza planificación entre sectores productivos.</li>
-          </ul>
-        </details>
+        <div className="border rounded-md">
+          <button 
+            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            onClick={() => toggleAccordion('beneficios')}
+          >
+            1. Beneficios y Seguridad
+            <svg 
+              className={`h-4 w-4 transition-transform ${openAccordion === 'beneficios' ? 'rotate-180' : ''}`} 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {openAccordion === 'beneficios' && (
+            <ul className="list-disc list-inside px-4 pb-3">
+              <li>Mejora conectividad rural y seguridad vial.</li>
+              <li>Reduce costos logísticos y prevenís cortes.</li>
+              <li>Optimiza planificación entre sectores productivos.</li>
+            </ul>
+          )}
+        </div>
 
-        <details className="border rounded-md">
-          <summary className="px-3 py-2 font-medium cursor-pointer">2. Cómo Funciona</summary>
-          <ul className="list-disc list-inside px-4 pb-3">
-            <li>Reportes ciudadanos de caminos.</li>
-            <li>Pluviómetros e integración automática.</li>
-            <li>Alertas por color: verde, amarillo, rojo.</li>
-            <li>Administrador puede validar o anular alertas.</li>
-          </ul>
-        </details>
+        <div className="border rounded-md">
+          <button 
+            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            onClick={() => toggleAccordion('funcionamiento')}
+          >
+            2. Cómo Funciona
+            <svg 
+              className={`h-4 w-4 transition-transform ${openAccordion === 'funcionamiento' ? 'rotate-180' : ''}`} 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {openAccordion === 'funcionamiento' && (
+            <ul className="list-disc list-inside px-4 pb-3">
+              <li>Reportes ciudadanos de caminos.</li>
+              <li>Pluviómetros e integración automática.</li>
+              <li>Alertas por color: verde, amarillo, rojo.</li>
+              <li>Administrador puede validar o anular alertas.</li>
+            </ul>
+          )}
+        </div>
 
-        <details className="border rounded-md">
-          <summary className="px-3 py-2 font-medium cursor-pointer">3. Pluviometría y Alertas</summary>
-          <ul className="list-disc list-inside px-4 pb-3">
-            <li>Verde = habilitado; Amarillo = precaución (2–5 mm/h); Rojo = cierre (&gt;5 mm/h).</li>
-            <li>Acumulados 48 h avalan cierres automáticos.</li>
-            <li>Sin lluvias 12 h → se desactiva alerta.</li>
-          </ul>
-        </details>
+        <div className="border rounded-md">
+          <button 
+            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            onClick={() => toggleAccordion('pluviometria')}
+          >
+            3. Pluviometría y Alertas
+            <svg 
+              className={`h-4 w-4 transition-transform ${openAccordion === 'pluviometria' ? 'rotate-180' : ''}`} 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {openAccordion === 'pluviometria' && (
+            <ul className="list-disc list-inside px-4 pb-3">
+              <li>Verde = habilitado; Amarillo = precaución (2–5 mm/h); Rojo = cierre (&gt;5 mm/h).</li>
+              <li>Acumulados 48 h avalan cierres automáticos.</li>
+              <li>Sin lluvias 12 h → se desactiva alerta.</li>
+            </ul>
+          )}
+        </div>
 
-        <details className="border rounded-md">
-          <summary className="px-3 py-2 font-medium cursor-pointer">4. Instituciones y Alianzas</summary>
-          <ul className="list-disc list-inside px-4 pb-3">
-            <li>Gobierno Departamental de Cerro Largo.</li>
-            <li>INUMET – Datos y soporte técnico.</li>
-            <li>Productores agropecuarios.</li>
-            <li>UPM / LUMIN / MINERVA / COLEME / ACA.</li>
-            <li>Transportistas &amp; camioneros.</li>
-            <li>MTOP / OPP / FDI (apoyo institucional).</li>
-          </ul>
-        </details>
+        <div className="border rounded-md">
+          <button 
+            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            onClick={() => toggleAccordion('instituciones')}
+          >
+            4. Instituciones y Alianzas
+            <svg 
+              className={`h-4 w-4 transition-transform ${openAccordion === 'instituciones' ? 'rotate-180' : ''}`} 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {openAccordion === 'instituciones' && (
+            <ul className="list-disc list-inside px-4 pb-3">
+              <li>Gobierno Departamental de Cerro Largo.</li>
+              <li>INUMET – Datos y soporte técnico.</li>
+              <li>Productores agropecuarios.</li>
+              <li>UPM / LUMIN / MINERVA / COLEME / ACA.</li>
+              <li>Transportistas &amp; camioneros.</li>
+              <li>MTOP / OPP / FDI (apoyo institucional).</li>
+            </ul>
+          )}
+        </div>
 
-        <details className="border rounded-md">
-          <summary className="px-3 py-2 font-medium cursor-pointer">5. Contacto – Intendencia de Cerro Largo</summary>
-          <div className="px-4 pb-3">
-            <p><strong>Dirección:</strong> General Justino Muniz 591, Melo.</p>
-            <p><strong>Teléfonos:</strong> +598 4642 6551 al 58</p>
-            <p><strong>Facebook:</strong> Gobierno de Cerro Largo</p>
-          </div>
-        </details>
+        <div className="border rounded-md">
+          <button 
+            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            onClick={() => toggleAccordion('contacto')}
+          >
+            5. Contacto – Intendencia de Cerro Largo
+            <svg 
+              className={`h-4 w-4 transition-transform ${openAccordion === 'contacto' ? 'rotate-180' : ''}`} 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {openAccordion === 'contacto' && (
+            <div className="px-4 pb-3">
+              <p><strong>Dirección:</strong> General Justino Muniz 591, Melo.</p>
+              <p><strong>Teléfonos:</strong> +598 4642 6551 al 58</p>
+              <p><strong>Facebook:</strong> Gobierno de Cerro Largo</p>
+            </div>
+          )}
+        </div>
 
         {/* Pie con logos */}
-        <div className="pt-2 border-t flex justify-between">
-         <img src="/gobcerro.png" alt="Gob Cerro Largo" className="h-7" />
-          <img src="/inumet_logo_transparente.png" alt="INUMET" className="h-7" />
+        <div className="pt-2 border-t flex justify-center">
+          <img src="/gobcerro.png" alt="Gob Cerro Largo" className="h-10" />
         </div>
       </div>
     </div>
