@@ -141,7 +141,7 @@ export default function SiteBanner() {
 
   return (
     <div style={style} role="status" aria-live="polite">
-      <span style={{ fontWeight: 600 }}>INFORMA:</span>
+      <span style={{ fontWeight: 600 }}>⚠ AVISO:</span>
       <span style={{ flexShrink: 1 }}>{cfg.text}</span>
       {cfg.link_href && cfg.link_text ? (
         <a href={cfg.link_href} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', marginLeft: 8, whiteSpace: 'nowrap' }}>
