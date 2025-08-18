@@ -190,7 +190,7 @@ export default function App() {
 
       {/* Botones Flotantes (FABs) abajo a la izquierda */}
       <div 
-        className="fixed z-[1000] flex flex-col items-start gap-4"
+        className="fixed z-[1000] flex flex-col items-start gap-2"
         style={{
           bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))',
           left: 'max(1rem, env(safe-area-inset-left, 1rem))'
