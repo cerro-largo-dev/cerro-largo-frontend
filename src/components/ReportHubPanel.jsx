@@ -264,7 +264,7 @@ return () => {
               </label>
 
               {/* ↓↓↓ Altura reducida */}
-              <div className="max-h-36 overflow-auto pr-1 rounded-md border border-gray-200">
+              <div className="max-h-24 overflow-auto pr-1 rounded-md border border-gray-200">
                 <ul className="divide-y divide-gray-100">
                   {ZONE_ORDER.map((z) => {
                     const checked = zones.includes(z);
