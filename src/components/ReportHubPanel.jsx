@@ -48,12 +48,11 @@ export default function ReportHubPanel({ open = false, anchorRect = null, onClos
     if (!open) return;
     computePosition();
     const onResize = () => computePosition();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('scroll', onResize, { passive: true });
-    return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('scroll', onResize);
-    };
+ window.addEventListener('resize', onResize);
+return () => {
+  window.removeEventListener('resize', onResize);
+};
+
   }, [open, computePosition]);
 
   // Cerrar con Escape y click-outside
