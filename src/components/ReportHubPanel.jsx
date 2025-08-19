@@ -312,9 +312,11 @@ return () => {
                 ].join(' ')}
               >
                 {saving ? 'Guardando…' : 'Guardar'}
-              </button>
-
-              <button type="button" onClick={onClose} className="text-sm text-gray-600 hover:text-gray-800">
+              </button>    type="button"
+                onClick={handleClose}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                disabled={isSubmitting}
+              >
                 Cancelar
               </button>
             </div>
