@@ -4,39 +4,32 @@ export default function AlertWidget() {
   const [alerta, setAlerta] = useState(null);
   const [visible, setVisible] = useState(true);
 
-  const API = "https://services.meteored.com/web/warnings/v4/current/uruguay/es/";
+  // Lee tu backend ya filtrado a Cerro Largo
+  const API = "/api/inumet/alerts/cerro-largo";
 
-  // Función para cargar desde la API
   const loadAlert = async () => {
     try {
-      const res = await fetch(API);
+      const res = await fetch(API, { credentials: "include" });
       const data = await res.json();
-      const allGroups = data?.data?.respuesta?.alertas || [];
 
-      const enCerroLargo = [];
-      allGroups.forEach((grp) => {
-        const w = grp.group.warnings.days[0].warnings[0];
-        const scope = (w?.scope ?? "").toLowerCase();
-        if (scope.includes("cerro largo")) {
-          const provider = Object.values(grp.providers || {})[0];
-          w.provider_name = provider?.name || "Proveedor";
-          enCerroLargo.push(w);
-        }
-      });
-
-      if (enCerroLargo.length) {
-        enCerroLargo.sort((a, b) => b.risk - a.risk);
-        setAlerta(enCerroLargo[0]);
-        setVisible(true); // volver a mostrar si desapareció
+      if (data?.ok && Array.isArray(data.alerts) && data.alerts.length) {
+        const a = data.alerts[0]; // más severa primero
+        setAlerta({
+          phen: a.name || "Alerta INUMET",
+          level: Number(a.level || 0),          // 1=Amarilla, 2=Naranja, 3=Roja
+          provider_name: "INUMET Uruguay",
+          description: a.description || "",
+        });
+        setVisible(true); // si estaba cerrada, vuelve si hay nueva alerta
       } else {
         setAlerta(null);
       }
     } catch (e) {
-      console.error("Error consulta Meteored:", e);
+      console.error("Error consulta INUMET:", e);
     }
   };
 
-  // Primera carga + autorefresco cada 10 min
+  // Primera carga + auto refresh 10 min
   useEffect(() => {
     loadAlert();
     const timer = setInterval(loadAlert, 10 * 60 * 1000);
@@ -53,8 +46,9 @@ export default function AlertWidget() {
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-[1500] p-2 rounded-lg shadow-xl text-white flex items-center gap-2 ${colors[alerta.risk] || "bg-gray-400"}`}
+      className={`fixed bottom-4 right-4 z-[1500] p-2 rounded-lg shadow-xl text-white flex items-center gap-2 ${colors[alerta.level] || "bg-gray-400"}`}
       style={{ fontSize: "10px" }}
+      title={alerta.description}
     >
       <img
         src="https://services.meteored.com/web/viewer/css/svgs/warnings/2.svg"
@@ -69,6 +63,7 @@ export default function AlertWidget() {
         onClick={() => setVisible(false)}
         className="ml-1 text-xs font-bold"
         style={{ lineHeight: 1 }}
+        aria-label="Cerrar alerta"
       >
         ×
       </button>
