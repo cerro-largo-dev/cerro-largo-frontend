@@ -4,37 +4,45 @@ export default function AlertWidget() {
   const [alerta, setAlerta] = useState(null);
   const [visible, setVisible] = useState(true);
 
-  // Construye la URL en runtime (prioriza variables globales del index.html)
-  const getApiUrl = () => {
+  // Resuelve la base del backend en runtime.
+  const getBackendBase = () => {
     const be =
       (typeof window !== "undefined" &&
         (window.BACKEND_URL || window.API_BASE_URL)) ||
-      import.meta.env.VITE_REACT_APP_BACKEND_URL ||
-      "";
-    return `${be}/api/inumet/alerts/cerro-largo`;
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        (import.meta.env.VITE_REACT_APP_BACKEND_URL ||
+          import.meta.env.VITE_BACKEND_URL)) ||
+      (typeof process !== "undefined" &&
+        process.env &&
+        (process.env.REACT_APP_BACKEND_URL ||
+          process.env.VITE_BACKEND_URL)) ||
+      ""; // si queda vacío, App.jsx ya setea window.BACKEND_URL por defecto
+    return String(be).replace(/\/$/, "");
   };
+
+  const getApiUrl = () => `${getBackendBase()}/api/inumet/alerts/cerro-largo`;
 
   const loadAlert = async () => {
     const API = getApiUrl();
-    if (!API || API.startsWith("/api/")) {
-      console.warn("[AlertWidget] BACKEND_URL/API_BASE_URL no definido");
-      return;
-    }
+    console.log("[AlertWidget] API =", API);
     try {
       const res = await fetch(API, { credentials: "include" });
 
-      // Si viene HTML (errores 404/500), evito parsear como JSON
+      // Evita parsear HTML de error como JSON
+      const ct = res.headers.get("content-type") || "";
+      const raw = await res.text();
       if (!res.ok) {
-        const body = await res.text();
-        throw new Error(
-          `HTTP ${res.status} ${res.statusText} — ${body.slice(0, 200)}`
-        );
+        throw new Error(`HTTP ${res.status} ${res.statusText} — ${raw.slice(0, 200)}`);
+      }
+      if (!ct.includes("application/json")) {
+        throw new Error(`No-JSON — ${raw.slice(0, 200)}`);
       }
 
-      const data = await res.json();
+      const data = JSON.parse(raw);
 
       if (data?.ok && Array.isArray(data.alerts) && data.alerts.length) {
-        const a = data.alerts[0]; // más severa/reciente primero
+        const a = data.alerts[0]; // ya viene ordenada (más severa/reciente primero)
         setAlerta({
           phen: a.name || "Alerta INUMET",
           level: Number(a.level || 0), // 1=Amarilla, 2=Naranja, 3=Roja
@@ -51,9 +59,11 @@ export default function AlertWidget() {
     }
   };
 
+  // Primera carga + refresco cada 10 minutos
   useEffect(() => {
+    console.log("[AlertWidget] montado");
     loadAlert();
-    const timer = setInterval(loadAlert, 10 * 60 * 1000); // 10 minutos
+    const timer = setInterval(loadAlert, 10 * 60 * 1000);
     return () => clearInterval(timer);
   }, []);
 
