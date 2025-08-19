@@ -5,8 +5,9 @@ export default function AlertWidget() {
   const [visible, setVisible] = useState(true);
 
   // Lee tu backend ya filtrado a Cerro Largo
-  const API = "/api/inumet/alerts/cerro-largo";
-
+const be = (typeof window !== "undefined" && window.BACKEND_URL) || "";
+const API = `${be}/api/inumet/alerts/cerro-largo`;
+  
   const loadAlert = async () => {
     try {
       const res = await fetch(API, { credentials: "include" });
