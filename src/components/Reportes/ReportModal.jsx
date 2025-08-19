@@ -242,7 +242,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
       className="p-4"
       style={modalStyle}
     >
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-lg border">
         <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
           <h3 className="text-lg font-semibold">Reportar Estado</h3>
           <button
