@@ -9,6 +9,7 @@ import ReportHubPanel from './components/ReportHubPanel';
 import InfoButton from './components/InfoButton';
 import InfoPanel from './components/InfoPanel';
 import SiteBanner from './components/SiteBanner';
+import AlertWidget from "./components/AlertWidget";
 
 // Estilos
 import './App.css';
@@ -236,6 +237,10 @@ export default function App() {
           onBulkZoneStatesUpdate={handleBulkZoneStatesUpdate}
           onZoneStateChange={handleZoneStateChange}
         />
+
+            {/* Alertas */}
+        <AlertWidget />
+
       )}
     </div>
   );
