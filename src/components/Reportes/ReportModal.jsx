@@ -291,27 +291,27 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
 
             {/* Nombre del lugar (opcional) */}
             <div className="space-y-2">
-              <label htmlFor="placeName" className="text-sm font-medium">Nombre del lugar (opcional)</label>
+              <label htmlFor="placeName" className="text-sm font-medium">Nombre del lugar</label>
               <input
                 id="placeName"
                 name="placeName"
                 value={formData.placeName}
                 onChange={handleInputChange}
-                placeholder="Ej: Curva peligrosa en Ruta 8"
+                placeholder="Ej: Paraje Arriera"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             {/* Descripción */}
             <div className="space-y-2">
-              <label htmlFor="description" className="text-sm font-medium">Descripción *</label>
+              <label htmlFor="description" className="text-sm font-medium">Descripción</label>
               <textarea
                 id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="Describe el estado de la caminería o el problema que observas..."
-                rows={4}
+                placeholder="Describe el problema que observas... Ej: Puente Cortado"
+                rows={3}
                 maxLength={500}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
