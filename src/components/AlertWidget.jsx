@@ -5,9 +5,9 @@ export default function AlertWidget() {
   const [visible, setVisible] = useState(true);
 
   // Lee tu backend ya filtrado a Cerro Largo
-const be = (typeof window !== "undefined" && window.BACKEND_URL) || "";
-const API = `${be}/api/inumet/alerts/cerro-largo`;
-  
+  const be = (typeof window !== "undefined" && window.BACKEND_URL) || "";
+  const API = `${be}/api/inumet/alerts/cerro-largo`;
+
   const loadAlert = async () => {
     try {
       const res = await fetch(API, { credentials: "include" });
@@ -17,7 +17,7 @@ const API = `${be}/api/inumet/alerts/cerro-largo`;
         const a = data.alerts[0]; // más severa primero
         setAlerta({
           phen: a.name || "Alerta INUMET",
-          level: Number(a.level || 0),          // 1=Amarilla, 2=Naranja, 3=Roja
+          level: Number(a.level || 0), // 1=Amarilla, 2=Naranja, 3=Roja
           provider_name: "INUMET Uruguay",
           description: a.description || "",
         });
@@ -42,12 +42,14 @@ const API = `${be}/api/inumet/alerts/cerro-largo`;
   const colors = {
     1: "bg-yellow-400",
     2: "bg-orange-500",
-    3: "bg-red-600"
+    3: "bg-red-600",
   };
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-[1500] p-2 rounded-lg shadow-xl text-white flex items-center gap-2 ${colors[alerta.level] || "bg-gray-400"}`}
+      className={`fixed bottom-4 right-4 z-[1500] p-2 rounded-lg shadow-xl text-white flex items-center gap-2 ${
+        colors[alerta.level] || "bg-gray-400"
+      }`}
       style={{ fontSize: "10px" }}
       title={alerta.description}
     >
