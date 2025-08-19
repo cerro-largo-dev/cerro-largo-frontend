@@ -382,14 +382,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
 
             {/* Botones de acción */}
             <div className="flex gap-2 pt-4">
-              <button
-                type="button"
-                onClick={handleClose}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                disabled={isSubmitting}
-              >
-                Cancelar
-              </button>
+             
               <button
                 type="submit"
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
@@ -403,6 +396,15 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
                 ) : (
                   'Enviar'
                 )}
+              </button>
+              
+            <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                disabled={isSubmitting}
+              >
+                Cancelar
               </button>
             </div>
           </form>
