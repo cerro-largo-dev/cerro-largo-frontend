@@ -227,6 +227,9 @@ export default function App() {
         onLocationChange={handleUserLocationChange}
       />
 
+      {/* Alertas (siempre visibles) */}
+        <AlertWidget />
+
       {/* Banner informativo en la parte inferior */}
       <SiteBanner />
 
@@ -237,11 +240,7 @@ export default function App() {
           onBulkZoneStatesUpdate={handleBulkZoneStatesUpdate}
           onZoneStateChange={handleZoneStateChange}
         />
-
-            {/* Alertas */}
-        <AlertWidget />
-
-      )}
+     )}
     </div>
   );
 }
