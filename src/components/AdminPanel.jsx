@@ -360,21 +360,21 @@ const AdminPanel = ({
 
     return (
       <div className="banner-editor" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
-        <h5 style={{ marginBottom: 8 }}>Mensaje público (Banner)</h5>
+        <h5 style={{ marginBottom: 8 }}>Mensaje público (AVISO)</h5>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={3}
-            placeholder="Escribe el mensaje del banner (si está vacío, no se muestra)"
+            rows={1}
+            placeholder="Escribe el mensaje de aviso..."
             style={{ width: '100%', padding: 8, border: '1px solid #d1d5db', borderRadius: 6 }}
           />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Mostrar banner
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Mostrar Aviso
           </label>
           <div>
             <button onClick={save} disabled={saving} className="update-btn">
-              {saving ? 'Guardando…' : 'Guardar banner'}
+              {saving ? 'Guardando…' : 'Guardar Aviso'}
             </button>
           </div>
         </div>
