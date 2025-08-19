@@ -4,13 +4,31 @@ export default function AlertWidget() {
   const [alerta, setAlerta] = useState(null);
   const [visible, setVisible] = useState(true);
 
-  // Lee tu backend ya filtrado a Cerro Largo
-  const be = (typeof window !== "undefined" && window.BACKEND_URL) || "";
-  const API = `${be}/api/inumet/alerts/cerro-largo`;
+  // URL base: primero usa window.API_BASE_URL si existe
+  const getApiUrl = () => {
+    const be =
+      (typeof window !== "undefined" &&
+        (window.BACKEND_URL || window.API_BASE_URL)) ||
+      import.meta.env.VITE_REACT_APP_BACKEND_URL ||
+      "";
+    return `${be}/api/inumet/alerts/cerro-largo`;
+  };
 
   const loadAlert = async () => {
+    const API = getApiUrl();
+    console.log("[AlertWidget] API =", API);
+
     try {
       const res = await fetch(API, { credentials: "include" });
+
+      // Si no es JSON válido (ej. devuelve HTML de error), mostramos log
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(
+          `HTTP ${res.status} ${res.statusText} — ${body.slice(0, 200)}`
+        );
+      }
+
       const data = await res.json();
 
       if (data?.ok && Array.isArray(data.alerts) && data.alerts.length) {
@@ -21,12 +39,13 @@ export default function AlertWidget() {
           provider_name: "INUMET Uruguay",
           description: a.description || "",
         });
-        setVisible(true); // si estaba cerrada, vuelve si hay nueva alerta
+        setVisible(true);
       } else {
         setAlerta(null);
       }
     } catch (e) {
       console.error("Error consulta INUMET:", e);
+      setAlerta(null);
     }
   };
 
