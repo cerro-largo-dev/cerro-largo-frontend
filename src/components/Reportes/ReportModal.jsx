@@ -401,7 +401,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
                     Enviando...
                   </>
                 ) : (
-                  'Enviar Reporte'
+                  'Enviar'
                 )}
               </button>
             </div>
