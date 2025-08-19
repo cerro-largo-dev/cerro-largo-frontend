@@ -2,45 +2,48 @@ import React, { useEffect, useState } from "react";
 
 export default function AlertWidget() {
   const [alerta, setAlerta] = useState(null);
+  const [visible, setVisible] = useState(true);
 
-  // IDs de grupo que querés consultar en Meteored:
-  const GROUP_IDS = [
-    "0328baafbf8b3d091b5bfc28c1db66ad",
-    "3ec26314fec562fadd3528e2d4b63461"
-  ];
+  const API = "https://services.meteored.com/web/warnings/v4/current/uruguay/es/";
 
-  useEffect(() => {
-    async function fetchAll() {
-      const results = await Promise.all(
-        GROUP_IDS.map((id) =>
-          fetch(`https://services.meteored.com/web/warnings/v4/group/${id}/es/`)
-            .then((r) => r.json())
-            .catch(() => null)
-          )
-      );
+  // Función para cargar desde la API
+  const loadAlert = async () => {
+    try {
+      const res = await fetch(API);
+      const data = await res.json();
+      const allGroups = data?.data?.respuesta?.alertas || [];
 
-      const todas = [];
-
-      results.forEach((data) => {
-        const alertas = data?.data?.respuesta?.alertas;
-        if (alertas?.length) {
-          const w = alertas[0].group.warnings.days[0].warnings[0];
-          const providerObj = Object.values(alertas[0].providers || {})[0];
-          w.provider_name = providerObj?.name || "Proveedor";
-          todas.push(w);
+      const enCerroLargo = [];
+      allGroups.forEach((grp) => {
+        const w = grp.group.warnings.days[0].warnings[0];
+        const scope = (w?.scope ?? "").toLowerCase();
+        if (scope.includes("cerro largo")) {
+          const provider = Object.values(grp.providers || {})[0];
+          w.provider_name = provider?.name || "Proveedor";
+          enCerroLargo.push(w);
         }
       });
 
-      if (todas.length) {
-        todas.sort((a, b) => b.risk - a.risk);
-        setAlerta(todas[0]);
+      if (enCerroLargo.length) {
+        enCerroLargo.sort((a, b) => b.risk - a.risk);
+        setAlerta(enCerroLargo[0]);
+        setVisible(true); // volver a mostrar si desapareció
+      } else {
+        setAlerta(null);
       }
+    } catch (e) {
+      console.error("Error consulta Meteored:", e);
     }
+  };
 
-    fetchAll();
+  // Primera carga + autorefresco cada 10 min
+  useEffect(() => {
+    loadAlert();
+    const timer = setInterval(loadAlert, 10 * 60 * 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  if (!alerta) return null;
+  if (!alerta || !visible) return null;
 
   const colors = {
     1: "bg-yellow-400",
@@ -49,16 +52,26 @@ export default function AlertWidget() {
   };
 
   return (
-    <div className={`fixed bottom-4 right-4 z-[1500] p-3 rounded-lg shadow-xl text-white flex items-center gap-2 ${colors[alerta.risk] || "bg-gray-400"}`}>
+    <div
+      className={`fixed bottom-4 right-4 z-[1500] p-2 rounded-lg shadow-xl text-white flex items-center gap-2 ${colors[alerta.risk] || "bg-gray-400"}`}
+      style={{ fontSize: "10px" }}
+    >
       <img
         src="https://services.meteored.com/web/viewer/css/svgs/warnings/2.svg"
         alt="Alerta"
-        className="w-6 h-6"
+        className="w-5 h-5"
       />
-      <div className="flex flex-col max-w-[220px] text-xs">
+      <div className="flex flex-col max-w-[180px] leading-tight">
         <span className="font-semibold">{alerta.phen}</span>
-        <span className="text-[10px]">— {alerta.provider_name}</span>
+        <span>— {alerta.provider_name}</span>
       </div>
+      <button
+        onClick={() => setVisible(false)}
+        className="ml-1 text-xs font-bold"
+        style={{ lineHeight: 1 }}
+      >
+        ×
+      </button>
     </div>
   );
 }
