@@ -3,37 +3,41 @@ import React, { useEffect, useState } from "react";
 export default function AlertWidget() {
   const [alerta, setAlerta] = useState(null);
 
-  // Puedes poner más IDs dentro del arreglo:
+  // IDs de grupo que querés consultar en Meteored:
   const GROUP_IDS = [
-    "0328baafbf8b3d091b5bfc28c1db66ad",   // naranja por ejemplo
-    "3ec26314fec562fadd3528e2d4b63461"    // amarilla por ejemplo
+    "0328baafbf8b3d091b5bfc28c1db66ad",
+    "3ec26314fec562fadd3528e2d4b63461"
   ];
 
   useEffect(() => {
-    // Trae todas las alertas en paralelo
-    Promise.all(
-      GROUP_IDS.map((id) =>
-        fetch(`https://services.meteored.com/web/warnings/v4/group/${id}/es/`)
-          .then((r) => r.json())
-          .catch(() => null)
-      )
-    ).then((arr) => {
+    async function fetchAll() {
+      const results = await Promise.all(
+        GROUP_IDS.map((id) =>
+          fetch(`https://services.meteored.com/web/warnings/v4/group/${id}/es/`)
+            .then((r) => r.json())
+            .catch(() => null)
+          )
+      );
+
       const todas = [];
 
-      arr.forEach((data) => {
+      results.forEach((data) => {
         const alertas = data?.data?.respuesta?.alertas;
         if (alertas?.length) {
           const w = alertas[0].group.warnings.days[0].warnings[0];
+          const providerObj = Object.values(alertas[0].providers || {})[0];
+          w.provider_name = providerObj?.name || "Proveedor";
           todas.push(w);
         }
       });
 
-      // elegimos la de riesgo más alto
       if (todas.length) {
         todas.sort((a, b) => b.risk - a.risk);
         setAlerta(todas[0]);
       }
-    });
+    }
+
+    fetchAll();
   }, []);
 
   if (!alerta) return null;
@@ -53,7 +57,7 @@ export default function AlertWidget() {
       />
       <div className="flex flex-col max-w-[220px] text-xs">
         <span className="font-semibold">{alerta.phen}</span>
-        <span className="truncate">{alerta.description}</span>
+        <span className="text-[10px]">— {alerta.provider_name}</span>
       </div>
     </div>
   );
