@@ -1,19 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-// NUEVO: Componente para el ícono SVG de cierre.
-// Usar `currentColor` para el `stroke` permite que herede el color del texto del padre.
 const CloseIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <line x1="18" y1="6" x2="6" y2="18"></line>
     <line x1="6" y1="6" x2="18" y2="18"></line>
   </svg>
@@ -22,19 +11,17 @@ const CloseIcon = () => (
 export default function SiteBanner() {
   const [cfg, setCfg] = useState(null);
   const [leftOffset, setLeftOffset] = useState(92);
-  const [isVisible, setIsVisible] = useState(true); // NUEVO: Estado para el cierre
+  const [isVisible, setIsVisible] = useState(true);
 
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
-    (typeof import.meta !== 'undefined' &&
-      import.meta.env &&
+    (typeof import.meta !== 'undefined' && import.meta.env &&
       (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
-    (typeof process !== 'undefined' &&
-      process.env &&
+    (typeof process !== 'undefined' && process.env &&
       (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
     'https://cerro-largo-backend.onrender.com';
 
-  const API = useMemo(( ) => {
+  const API = useMemo(() => {
     const base = String(BACKEND_URL || '').replace(/\/$/, '');
     return (p) => base + p;
   }, [BACKEND_URL]);
@@ -47,29 +34,40 @@ export default function SiteBanner() {
     try { return JSON.parse(text); } catch { return {}; }
   };
 
-  const fetchBanner = async () => {
-    for (const url of [API('/api/admin/banner'), API('/api/banner')]) {
-      try {
-        const res = await fetch(url, { credentials: 'include' });
-        const data = await parseMaybeJson(res);
-        if (data && data.enabled && String(data.text || '').trim()) {
-          setCfg({
-            enabled: !!data.enabled,
-            text: String(data.text || ''),
-            variant: String(data.variant || 'info').toLowerCase(),
-            link_text: String(data.link_text || ''),
-            link_href: String(data.link_href || ''),
-            id: String(data.id || ''),
-          });
-          setIsVisible(true); // NUEVO: Mostrar banner al cargar
-          return;
-        }
-      } catch { /* intenta siguiente */ }
-    }
-    setCfg(null);
+  const storageKey = (meta) => {
+    // cambia el “versionado” si cambia updated_at o el texto
+    const ver = (meta?.updated_at || '') + '|' + (meta?.text || '');
+    return `siteBannerHidden:${ver}`;
   };
 
-  // Offset dinámico en base al FAB (Lógica original sin cambios)
+  const fetchBanner = async () => {
+    // Solo usa el público; el admin lo consume desde /api/admin/banner
+    try {
+      const res = await fetch(API('/api/banner'), { credentials: 'include' });
+      const data = await parseMaybeJson(res);
+
+      if (data && data.enabled && String(data.text || '').trim()) {
+        setCfg({
+          enabled: !!data.enabled,
+          text: String(data.text || ''),
+          variant: String(data.variant || 'info').toLowerCase(),
+          link_text: String(data.link_text || ''),
+          link_href: String(data.link_href || ''),
+          id: String(data.id || '1'),
+          updated_at: String(data.updated_at || ''),
+        });
+
+        // visibilidad: si lo cerré antes para ESTA versión, no lo muestro
+        const key = storageKey(data);
+        const hidden = localStorage.getItem(key) === '1';
+        setIsVisible(!hidden);
+        return;
+      }
+    } catch {}
+    setCfg(null);
+    setIsVisible(false);
+  };
+
   useEffect(() => {
     const compute = () => {
       const fab = document.querySelector('.report-fab');
@@ -83,8 +81,8 @@ export default function SiteBanner() {
     return () => window.removeEventListener('resize', compute);
   }, []);
 
-  // Cargar banner + live update
   useEffect(() => { fetchBanner(); }, []);
+
   useEffect(() => {
     const h = (e) => {
       const b = e?.detail || {};
@@ -95,21 +93,22 @@ export default function SiteBanner() {
           variant: String(b.variant || 'info').toLowerCase(),
           link_text: String(b.link_text || ''),
           link_href: String(b.link_href || ''),
-          id: String(b.id || ''),
+          id: String(b.id || '1'),
+          updated_at: String(b.updated_at || ''),
         });
-        setIsVisible(true); // NUEVO: Mostrar banner al actualizar
+        const key = storageKey(b);
+        const hidden = localStorage.getItem(key) === '1';
+        setIsVisible(!hidden);
       } else {
         setCfg(null);
+        setIsVisible(false);
       }
     };
     window.addEventListener('bannerUpdated', h);
     return () => window.removeEventListener('bannerUpdated', h);
   }, []);
 
-  // MODIFICADO: La condición ahora también comprueba si el usuario lo cerró
-  if (!cfg || !cfg.enabled || !String(cfg.text || '').trim() || !isVisible) {
-    return null;
-  }
+  if (!cfg || !cfg.enabled || !String(cfg.text || '').trim() || !isVisible) return null;
 
   const palette =
     {
@@ -127,7 +126,7 @@ export default function SiteBanner() {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    maxWidth: `calc(100vw - ${leftOffset}px - 24px)`, // Se ajusta el cálculo de maxWidth
+    maxWidth: `calc(100vw - ${leftOffset}px - 24px)`,
     padding: '6px 10px',
     borderRadius: 8,
     backdropFilter: 'blur(2px)',
@@ -139,31 +138,26 @@ export default function SiteBanner() {
     lineHeight: 1.3,
   };
 
+  const onClose = () => {
+    const key = storageKey(cfg);
+    localStorage.setItem(key, '1');  // recordar el cierre para ESTA versión
+    setIsVisible(false);
+  };
+
   return (
     <div style={style} role="status" aria-live="polite">
       <span style={{ fontWeight: 600 }}>AVISO:</span>
       <span style={{ flexShrink: 1 }}>{cfg.text}</span>
       {cfg.link_href && cfg.link_text ? (
-        <a href={cfg.link_href} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', marginLeft: 8, whiteSpace: 'nowrap' }}>
+        <a href={cfg.link_href} target="_blank" rel="noreferrer"
+           style={{ textDecoration: 'underline', marginLeft: 8, whiteSpace: 'nowrap' }}>
           {cfg.link_text}
         </a>
       ) : null}
-      {/* NUEVO: Botón de cierre con ícono SVG */}
-      <button
-        onClick={() => setIsVisible(false)}
-        aria-label="Cerrar banner"
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'inherit',
-          cursor: 'pointer',
-          padding: 0,
-          marginLeft: '8px',
-          opacity: 0.7,
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
+      <button onClick={onClose} aria-label="Cerrar banner"
+        style={{ background: 'none', border: 'none', color: 'inherit',
+                 cursor: 'pointer', padding: 0, marginLeft: '8px',
+                 opacity: 0.7, display: 'flex', alignItems: 'center' }}>
         <CloseIcon />
       </button>
     </div>
