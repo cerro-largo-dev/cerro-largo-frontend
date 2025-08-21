@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo } from 'react';
  * - Filtro de zonas según allowed_zones
  * - Update de estado con credenciales (CORS + cookies)
  * - Descarga de reporte en /api/report/download
- * - Editor de Banner (debajo de “Estados actuales”) con POST /api/admin/banner
+ * - Editor de Banner (debajo de “Estados actuales”) con PUT /api/admin/banner
  * - Emite CustomEvents para refrescar mapa y banner sin recargar
  *
  * Estructura respetada: toggle, login, selects, botones y lista de estados.
@@ -342,7 +342,7 @@ const AdminPanel = ({
           variant: 'info',
         };
         const res = await fetch(api('/api/admin/banner'), {
-          method: 'POST',
+          method: 'PUT', // <- CORREGIDO (antes POST)
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify(body),
