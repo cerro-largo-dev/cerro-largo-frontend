@@ -123,7 +123,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
             </svg>
           </button>
           {openAccordion === 'beneficios' && (
-            <div className="px-4 pb-3">
+            <div className="px-3 pb-3">
               <ul className="list-disc list-inside">
                 <li>Mejora conectividad rural y seguridad vial.</li>
                 <li>Reduce costos logísticos y prevenís cortes.</li>
