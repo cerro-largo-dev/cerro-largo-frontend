@@ -155,7 +155,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
                 <li>Realizar denuncias y cortes.</li>
                  <li>Suscribirte por Whatshapp.</li>
                   <li>AVISOS a la comunidad.</li>
-                 <li>Visualizar cortes/roturas/accidentes.</li>
+                 <li>Visualizar cortes - roturas - accidentes.</li>
               </ul>
             </div>
           )}
