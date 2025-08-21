@@ -91,7 +91,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
       {/* Cabecera del panel */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
         <div>
-          <h3 className="font-semibold text-gray-800">Caminos que conectan</h3>
+          <h3 className="font-semibold text-gray-800">Caminos que Conectan</h3>
           <p className="text-xs text-gray-600 mt-1">Plataforma digital que permite monitorear, reportar y gestionar en tiempo real el estado de los caminos rurales.</p>
         </div>
         <button
