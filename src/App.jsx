@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Componentes existentes
+// Componentes
 import MapComponent from "./components/MapComponent";
 import AdminPanel from "./components/AdminPanel";
 import ReportButton from "./components/Reportes/ReportButton";
@@ -18,7 +18,6 @@ import "./App.css";
 
 // ---------------------------- Util: BACKEND_URL ----------------------------
 function useBackendUrl() {
-  // Publica el BACKEND_URL en window para otros componentes si lo necesitan
   useEffect(() => {
     const be =
       (typeof import.meta !== "undefined" &&
@@ -49,11 +48,14 @@ function useBackendUrl() {
 function HomePage() {
   const BACKEND_URL = useBackendUrl();
 
-  // Estados globales que usa el mapa/paneles
+  // Estados del mapa/paneles
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // NUEVO: alertas visibles (del backend) → se pintan en el mapa
+  const [alerts, setAlerts] = useState([]);
 
   // Paneles / Modales
   const [reportOpen, setReportOpen] = useState(false);
@@ -68,7 +70,7 @@ function HomePage() {
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
-  // --- helpers ---
+  // Helpers
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: "include", ...options });
     const ct = res.headers.get("content-type") || "";
@@ -82,7 +84,7 @@ function HomePage() {
     }
   }, []);
 
-  // Geo del usuario (fallback Melo)
+  // Geolocalización (fallback: Melo)
   useEffect(() => {
     const FALLBACK = { lat: -32.3667, lng: -54.1667 };
     if (!navigator.geolocation) {
@@ -96,11 +98,7 @@ function HomePage() {
     );
   }, []);
 
-  // Acciones
-  const handleZoneStateChange = (zoneName, newStateEn) => {
-    setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
-  };
-
+  // Cargar estados de zonas
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -119,20 +117,49 @@ function HomePage() {
     }
   }, [BACKEND_URL, fetchJson]);
 
+  const handleZoneStateChange = (zoneName, newStateEn) => {
+    setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
+  };
   const handleBulkZoneStatesUpdate = (updatesMap) => {
     if (!updatesMap || typeof updatesMap !== "object") return;
     setZoneStates((prev) => ({ ...prev, ...updatesMap }));
   };
-
   const handleZonesLoad = (loadedZones) => {
     if (Array.isArray(loadedZones)) setZones(loadedZones);
   };
-
   const handleUserLocationChange = (loc) => {
     if (loc) setUserLocation(loc);
   };
 
-  // Paneles/Modales
+  // Cargar alertas visibles (NUEVO)
+  const loadAlerts = useCallback(async () => {
+    try {
+      const json = await fetchJson(`${BACKEND_URL}/api/reportes/visibles`);
+      if (json?.ok && Array.isArray(json.reportes)) {
+        setAlerts(
+          json.reportes
+            .filter((a) => a.latitud != null && a.longitud != null)
+            .map((a) => ({
+              id: a.id,
+              lat: a.latitud,
+              lng: a.longitud,
+              titulo: a.nombre_lugar || "Reporte",
+              descripcion: a.descripcion || "",
+            }))
+        );
+      }
+    } catch (e) {
+      // silencioso
+    }
+  }, [BACKEND_URL, fetchJson]);
+
+  useEffect(() => {
+    loadAlerts();
+    const t = setInterval(loadAlerts, 30000); // refrescar cada 30s
+    return () => clearInterval(t);
+  }, [loadAlerts]);
+
+  // UI handlers
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) setReportAnchorRect(btn.getBoundingClientRect());
@@ -185,6 +212,7 @@ function HomePage() {
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
+        alerts={alerts}   // <--- NUEVO: marcadores de atención
       />
 
       {/* FABs inferior-izquierda */}
@@ -196,7 +224,6 @@ function HomePage() {
         }}
       >
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
-
         <ReportButton
           ref={reportFabRef}
           onClick={handleToggleReportModal}
@@ -223,20 +250,17 @@ function HomePage() {
 
 // ---------------------------- App con Router ----------------------------
 export default function App() {
-  const BACKEND_URL = useBackendUrl(); // por si otros hijos lo usan en montaje
+  useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
 
   return (
     <BrowserRouter>
       <Routes>
-        {/* Home con mapa */}
         <Route path="/" element={<HomePage />} />
 
-        {/* Admin panel clásico */}
         <Route
           path="/admin"
           element={
             <AdminPanel
-              // Props que ya usabas; ajusta si tu AdminPanel necesita otras
               onRefreshZoneStates={() => {}}
               onBulkZoneStatesUpdate={() => {}}
               onZoneStateChange={() => {}}
@@ -244,10 +268,8 @@ export default function App() {
           }
         />
 
-        {/* Panel de Reportes */}
         <Route path="/admin/reportes" element={<ReportsPanel />} />
 
-        {/* Catch-all opcional → Home */}
         <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
