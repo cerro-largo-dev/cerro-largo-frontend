@@ -1,5 +1,5 @@
 // src/components/MapComponent.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
@@ -34,19 +34,15 @@ const gpsIcon = new L.Icon({
 });
 
 // Ícono de ATENCIÓN estilo Waze (triángulo amarillo con signo)
-// SVG inline para performance y sin dependencias externas.
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
     <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
       <g>
-        <!-- Borde negro para contraste -->
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
               fill="#000000"/>
-        <!-- Triángulo amarillo -->
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
               fill="#F59E0B" transform="scale(0.9) translate(1.3,1.3)"/>
-        <!-- Signo de exclamación -->
         <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
         <circle cx="12" cy="16.5" r="1.2" fill="#111827"/>
       </g>
@@ -63,8 +59,6 @@ const stateColors = {
   yellow: '#eab308',
   red: '#ef4444',
 };
-
-const BACKEND_URL = 'https://cerro-largo-backend.onrender.com/';
 
 // Manejar eventos de zoom
 function ZoomHandler({ onZoomChange }) {
@@ -88,7 +82,7 @@ function MapComponent({
   onZoneStateChange,
   onZonesLoad,
   userLocation,
-  // NUEVO: alertas a pintar en el mapa: [{ id, lat, lng, titulo, descripcion }]
+  // ALERTAS opcionales a pintar en el mapa: [{ id, lat, lng, titulo, descripcion }]
   alerts = [],
 }) {
   const [geoData, setGeoData] = useState(null);
@@ -100,8 +94,46 @@ function MapComponent({
   const [currentZoom, setCurrentZoom] = useState(8);
   const mapRef = useRef(null);
 
+  // BACKEND_URL coherente con App.jsx (window/env) y sin barra final
+  const BACKEND_URL = useMemo(() => {
+    const fromWin = (typeof window !== 'undefined' && window.BACKEND_URL) ? String(window.BACKEND_URL) : '';
+    const envs =
+      (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+      (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
+      '';
+    const base = (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
+    return base;
+  }, []);
+
   const mapCenter = [-32.35, -54.20];
   const handleZoomChange = (newZoom) => setCurrentZoom(newZoom);
+
+  // Helper: fetch JSON con timeout y backoff
+  const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 3, baseDelay = 500, timeoutMs = 8000 } = {}) => {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        const res = await fetch(url, {
+          credentials: 'include',
+          cache: 'no-store',
+          mode: 'cors',
+          signal: ctrl.signal,
+          ...opts,
+        });
+        clearTimeout(timer);
+
+        const ct = res.headers.get('content-type') || '';
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (!ct.includes('application/json')) throw new Error('No-JSON');
+
+        return await res.json();
+      } catch (e) {
+        if (i === retries) throw e;
+        await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -143,6 +175,8 @@ function MapComponent({
 
           // Cargar estados de zonas desde backend
           await loadZoneStates();
+        } else {
+          throw new Error('GeoJSON assets no disponibles');
         }
       } catch (error) {
         console.error('Error cargando datos del mapa:', error);
@@ -156,27 +190,38 @@ function MapComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadZoneStates = async () => {
+  const loadZoneStates = useCallback(async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}api/admin/zones/states`);
-      if (response.ok) {
-        const data = await response.json();
-        const stateMap = {};
-        if (data.states) {
+      const data = await fetchJsonRetry(`${BACKEND_URL}/api/admin/zones/states`);
+      const stateMap = {};
+      if (data && typeof data === 'object') {
+        if (data.states && typeof data.states === 'object') {
+          // { states: { "AREVALO": { state:"green" }, ... } }
           for (const zoneName in data.states) {
-            stateMap[zoneName] = data.states[zoneName].state;
+            const v = data.states[zoneName];
+            const raw = typeof v === 'string' ? v : (v && v.state);
+            stateMap[zoneName] = String(raw || '').toLowerCase();
+          }
+        } else {
+          // { "AREVALO": "green", ... }
+          for (const k of Object.keys(data)) {
+            stateMap[k] = String(data[k] || '').toLowerCase();
           }
         }
-        onZoneStatesLoad && onZoneStatesLoad(stateMap);
-      } else {
-        console.error('Failed to load zone states:', response.statusText);
-        setMessage({ type: 'error', text: 'Error al cargar estados de zonas' });
       }
+      onZoneStatesLoad && onZoneStatesLoad(stateMap);
     } catch (error) {
       console.error('Error loading zone states:', error);
-      setMessage({ type: 'error', text: 'Error al conectar con el servidor' });
+      setMessage({ type: 'error', text: 'Error al cargar estados de zonas' });
     }
-  };
+  }, [BACKEND_URL, fetchJsonRetry, onZoneStatesLoad]);
+
+  // refrescar cuando AdminPanel emite cambio
+  useEffect(() => {
+    const handler = () => loadZoneStates();
+    window.addEventListener('zoneStateUpdated', handler);
+    return () => window.removeEventListener('zoneStateUpdated', handler);
+  }, [loadZoneStates]);
 
   const getFeatureStyle = (feature) => {
     let zoneName;
@@ -187,7 +232,7 @@ function MapComponent({
     }
 
     const stateColor = zoneStates[zoneName] || 'green';
-    const finalColor = stateColors[stateColor];
+    const finalColor = stateColors[stateColor] || stateColors.green;
 
     return {
       fillColor: finalColor,
@@ -318,7 +363,7 @@ function MapComponent({
           </Marker>
         )}
 
-        {/* NUEVO: Marcadores de ALERTA (visibles desde el admin) */}
+        {/* Marcadores de ALERTA */}
         {Array.isArray(alerts) &&
           alerts.map((a) =>
             a && a.lat != null && a.lng != null ? (
