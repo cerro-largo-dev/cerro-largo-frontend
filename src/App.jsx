@@ -1,82 +1,90 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// src/App.jsx
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Importación de componentes
-import MapComponent from './components/MapComponent';
-import AdminPanel from './components/AdminPanel';
-import ReportButton from './components/Reportes/ReportButton';
-import ReportModal from './components/Reportes/ReportModal';
-import ReportHubPanel from './components/ReportHubPanel';
-import InfoButton from './components/InfoButton';
-import InfoPanel from './components/InfoPanel';
-import SiteBanner from './components/SiteBanner';
+// Componentes existentes
+import MapComponent from "./components/MapComponent";
+import AdminPanel from "./components/AdminPanel";
+import ReportButton from "./components/Reportes/ReportButton";
+import ReportModal from "./components/Reportes/ReportModal";
+import ReportHubPanel from "./components/ReportHubPanel";
+import InfoButton from "./components/InfoButton";
+import InfoPanel from "./components/InfoPanel";
+import SiteBanner from "./components/SiteBanner";
 import AlertWidget from "./components/AlertWidget";
+import ReportsPanel from "./components/ReportsPanel";
 
-// Estilos
-import './App.css';
+import "./App.css";
 
-export default function App() {
-  // Estados para datos y UI
+// ---------------------------- Util: BACKEND_URL ----------------------------
+function useBackendUrl() {
+  // Publica el BACKEND_URL en window para otros componentes si lo necesitan
+  useEffect(() => {
+    const be =
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+      (typeof process !== "undefined" &&
+        process.env &&
+        (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
+      "https://cerro-largo-backend.onrender.com";
+    if (typeof window !== "undefined") window.BACKEND_URL = String(be).replace(/\/$/, "");
+  }, []);
+
+  return useMemo(() => {
+    const be =
+      (typeof window !== "undefined" && window.BACKEND_URL) ||
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+      (typeof process !== "undefined" &&
+        process.env &&
+        (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
+      "https://cerro-largo-backend.onrender.com";
+    return String(be).replace(/\/$/, "");
+  }, []);
+}
+
+// ---------------------------- Home Page (Mapa) ----------------------------
+function HomePage() {
+  const BACKEND_URL = useBackendUrl();
+
+  // Estados globales que usa el mapa/paneles
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
-  const [isAdminRoute, setIsAdminRoute] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Estados y referencias para paneles y modales
+  // Paneles / Modales
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
 
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoAnchorRect, setInfoAnchorRect] = useState(null);
-  const infoBtnRef = useRef(null); // Referencia para el botón de Información
+  const infoBtnRef = useRef(null);
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
-  // --- Lógica de inicialización y datos ---
-
-  // Publicar BACKEND_URL en el objeto window
-  useEffect(() => {
-    const be =
-      (typeof import.meta !== 'undefined' && import.meta.env &&
-        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
-      (typeof process !== 'undefined' && process.env &&
-        (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
-      'https://cerro-largo-backend.onrender.com';
-    if (typeof window !== 'undefined' ) window.BACKEND_URL = String(be).replace(/\/$/, '');
+  // --- helpers ---
+  const fetchJson = useCallback(async (url, options = {}) => {
+    const res = await fetch(url, { credentials: "include", ...options });
+    const ct = res.headers.get("content-type") || "";
+    const text = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
+    if (!ct.includes("application/json")) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {};
+    }
   }, []);
 
-  const BACKEND_URL = useMemo(() => {
-    const be =
-      (typeof window !== 'undefined' && window.BACKEND_URL) ||
-      (typeof import.meta !== 'undefined' && import.meta.env &&
-        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
-      (typeof process !== 'undefined' && process.env &&
-        (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
-      'https://cerro-largo-backend.onrender.com';
-    return String(be ).replace(/\/$/, '');
-  }, []);
-
-  // Detectar si la ruta es /admin
+  // Geo del usuario (fallback Melo)
   useEffect(() => {
-    const compute = () => {
-      try {
-        const path = (typeof window !== 'undefined' && window.location?.pathname) || '';
-        setIsAdminRoute(/^\/admin\/?$/.test(path));
-      } catch {
-        setIsAdminRoute(false);
-      }
-    };
-    compute();
-    window.addEventListener('popstate', compute);
-    return () => window.removeEventListener('popstate', compute);
-  }, []);
-
-  // Obtener geolocalización del usuario con un fallback
-  useEffect(() => {
-    const FALLBACK = { lat: -32.3667, lng: -54.1667 }; // Coordenadas de Melo
+    const FALLBACK = { lat: -32.3667, lng: -54.1667 };
     if (!navigator.geolocation) {
       setUserLocation(FALLBACK);
       return;
@@ -88,17 +96,7 @@ export default function App() {
     );
   }, []);
 
-  // --- Handlers y funciones ---
-
-  const fetchJson = useCallback(async (url, options = {}) => {
-    const res = await fetch(url, { credentials: 'include', ...options });
-    const ct = res.headers.get('content-type') || '';
-    const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
-    if (!ct.includes('application/json')) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
-    try { return JSON.parse(text); } catch { return {}; }
-  }, []);
-
+  // Acciones
   const handleZoneStateChange = (zoneName, newStateEn) => {
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
@@ -110,19 +108,19 @@ export default function App() {
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
-          mapping[name] = info?.state || 'red';
+          mapping[name] = info?.state || "red";
         });
         setZoneStates(mapping);
       }
     } catch (e) {
-      console.warn('No se pudo refrescar estados:', e.message);
+      console.warn("No se pudo refrescar estados:", e.message);
     } finally {
       setRefreshing(false);
     }
   }, [BACKEND_URL, fetchJson]);
 
   const handleBulkZoneStatesUpdate = (updatesMap) => {
-    if (!updatesMap || typeof updatesMap !== 'object') return;
+    if (!updatesMap || typeof updatesMap !== "object") return;
     setZoneStates((prev) => ({ ...prev, ...updatesMap }));
   };
 
@@ -134,7 +132,7 @@ export default function App() {
     if (loc) setUserLocation(loc);
   };
 
-  // Funciones para abrir/cerrar paneles y modales
+  // Paneles/Modales
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) setReportAnchorRect(btn.getBoundingClientRect());
@@ -158,7 +156,7 @@ export default function App() {
 
   return (
     <div className="relative w-full h-screen">
-      {/* Botones de control superior derecho */}
+      {/* Botones barra superior */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
           onClick={handleRefreshZoneStates}
@@ -166,7 +164,7 @@ export default function App() {
           disabled={refreshing}
           title="Actualizar Mapa"
         >
-          {refreshing ? 'Actualizando...' : 'Actualizar Mapa'}
+          {refreshing ? "Actualizando..." : "Actualizar Mapa"}
         </button>
 
         <button
@@ -179,7 +177,7 @@ export default function App() {
         </button>
       </div>
 
-      {/* Componente principal del Mapa */}
+      {/* Mapa */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
@@ -189,37 +187,26 @@ export default function App() {
         userLocation={userLocation}
       />
 
-      {/* Botones Flotantes (FABs) abajo a la izquierda */}
-      <div 
+      {/* FABs inferior-izquierda */}
+      <div
         className="fixed z-[1000] flex flex-col items-start gap-2"
         style={{
-          bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))',
-          left: 'max(1rem, env(safe-area-inset-left, 1rem))'
+          bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))",
+          left: "max(1rem, env(safe-area-inset-left, 1rem))",
         }}
       >
-        <InfoButton 
-          ref={infoBtnRef} 
-          onClick={toggleInfo} 
-          isOpen={infoOpen}
-        />
-        
-        <ReportButton 
+        <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
+
+        <ReportButton
           ref={reportFabRef}
           onClick={handleToggleReportModal}
           onLocationChange={handleUserLocationChange}
         />
       </div>
 
-      {/* Paneles y Modales que se renderizan condicionalmente */}
+      {/* Paneles y modales */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
-      
-      <InfoPanel 
-        open={infoOpen} 
-        anchorRect={infoAnchorRect} 
-        onClose={closeInfoPanel}
-        buttonRef={infoBtnRef}  // <-- Aquí se pasa la referencia al panel
-      />
-      
+      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} buttonRef={infoBtnRef} />
       <ReportModal
         open={reportModalOpen}
         anchorRect={reportModalAnchorRect}
@@ -227,20 +214,42 @@ export default function App() {
         onLocationChange={handleUserLocationChange}
       />
 
-      {/* Alertas (siempre visibles) */}
-        <AlertWidget />
-
-      {/* Banner informativo en la parte inferior */}
+      {/* Alertas y banner */}
+      <AlertWidget />
       <SiteBanner />
-
-      {/* Panel de administración (solo visible en la ruta /admin) */}
-      {isAdminRoute && (
-        <AdminPanel
-          onRefreshZoneStates={handleRefreshZoneStates}
-          onBulkZoneStatesUpdate={handleBulkZoneStatesUpdate}
-          onZoneStateChange={handleZoneStateChange}
-        />
-     )}
     </div>
+  );
+}
+
+// ---------------------------- App con Router ----------------------------
+export default function App() {
+  const BACKEND_URL = useBackendUrl(); // por si otros hijos lo usan en montaje
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Home con mapa */}
+        <Route path="/" element={<HomePage />} />
+
+        {/* Admin panel clásico */}
+        <Route
+          path="/admin"
+          element={
+            <AdminPanel
+              // Props que ya usabas; ajusta si tu AdminPanel necesita otras
+              onRefreshZoneStates={() => {}}
+              onBulkZoneStatesUpdate={() => {}}
+              onZoneStateChange={() => {}}
+            />
+          }
+        />
+
+        {/* Panel de Reportes */}
+        <Route path="/admin/reportes" element={<ReportsPanel />} />
+
+        {/* Catch-all opcional → Home */}
+        <Route path="*" element={<HomePage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
