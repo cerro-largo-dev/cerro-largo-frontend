@@ -18,11 +18,11 @@ export default function ReportsPanel() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
 
   const fmtFecha = (s) => {
     if (!s) return "-";
-    // Si viene sin 'Z', asumimos UTC
-    const iso = s.endsWith("Z") ? s : `${s}Z`;
+    const iso = s.endsWith("Z") ? s : `${s}Z`; // si viene sin Z, asumimos UTC
     return new Date(iso).toLocaleString("es-UY", {
       timeZone: "America/Montevideo",
       year: "numeric",
@@ -82,6 +82,26 @@ export default function ReportsPanel() {
     }
   };
 
+  const toggleVisible = async (id, current) => {
+    if (!id) return;
+    try {
+      setTogglingId(id);
+      const res = await fetch(`${BACKEND_URL}/api/reportes/${id}/visible`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ visible: !current }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await load(data.current_page || 1);
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo cambiar visibilidad.");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   if (loading) return <div className="p-4">Cargando…</div>;
   if (err) return <div className="p-4 text-red-600">{err}</div>;
 
@@ -108,7 +128,6 @@ export default function ReportsPanel() {
               {data.reportes.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-3 whitespace-nowrap">
-                    {/* tamaño pequeño para fecha/hora */}
                     <span className="text-xs text-gray-700">{fmtFecha(r.fecha_creacion)}</span>
                   </td>
                   <td className="p-3 max-w-md">
@@ -135,14 +154,27 @@ export default function ReportsPanel() {
                     </div>
                   </td>
                   <td className="p-3">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      disabled={busyId === r.id}
-                      title="Borrar reporte"
-                      className="px-2 py-1 border rounded text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      {busyId === r.id ? "Borrando…" : "✕"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toggleVisible(r.id, r.visible)}
+                        disabled={togglingId === r.id}
+                        title={r.visible ? "Ocultar del mapa" : "Mostrar en mapa"}
+                        className={`px-2 py-1 border rounded hover:bg-amber-50 ${
+                          r.visible ? "text-amber-700 border-amber-300" : "text-gray-700"
+                        } disabled:opacity-50`}
+                      >
+                        {togglingId === r.id ? "…" : r.visible ? "Ocultar" : "Mostrar"}
+                      </button>
+
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        disabled={busyId === r.id}
+                        title="Borrar reporte"
+                        className="px-2 py-1 border rounded text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {busyId === r.id ? "Borrando…" : "✕"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
