@@ -127,7 +127,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
               <ul className="list-disc list-inside">
                 <li>Mejora conectividad rural y seguridad vial.</li>
                 <li>Reduce costos logísticos y prevenís cortes.</li>
-                <li>Optimiza planificación entre sectores productivos.</li>
+                <li>Optimiza planificación.</li>
               </ul>
             </div>
           )}
@@ -151,15 +151,11 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
           {openAccordion === 'funcionamiento' && (
             <div className="px-4 pb-3">
               <ul className="list-disc list-inside">
-                <li>Descargas alertas en PDF de Cerro Largo.</li>
-                <li>Realizar denuncias y reportes de caminos.</li>
-                 <li>Suscribirte a alertas por Whatshapp.</li>
-                <li>Pluviómetros digitales automáticos.</li>
-                <li>Alertas por color: verde, amarillo, rojo.</li>
-                 <li>Conectado en tiempo real.</li>
-                  <li>Mensajes en pantalla, AVISOS a la comunidad.</li>
+                <li>Descargas alertas en PDF.</li>
+                <li>Realizar denuncias y cortes.</li>
+                 <li>Suscribirte por Whatshapp.</li>
+                  <li>AVISOS a la comunidad.</li>
                  <li>Visualizar cortes/roturas/accidentes.</li>
-                <li>Alcaldes pueden validar o anular alertas.</li>
               </ul>
             </div>
           )}
@@ -184,7 +180,6 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
             <div className="px-4 pb-3">
               <ul className="list-disc list-inside">
                 <li>Verde = habilitado; Amarillo = precaución (2–5 mm/h); Rojo = cierre (&gt;5 mm/h).</li>
-                <li>Acumulados 48 h avalan cierres automáticos.</li>
                 <li>Sin lluvias 6 h → se desactiva alerta.</li>
               </ul>
             </div>
