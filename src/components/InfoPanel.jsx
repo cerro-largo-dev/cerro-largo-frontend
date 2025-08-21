@@ -110,7 +110,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
         {/* Acordeón 1: Beneficios */}
         <div className="border rounded-md">
           <button 
-            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            className="w-full px-3 py-2 font-semibold cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('beneficios')}
             aria-expanded={openAccordion === 'beneficios'}
           >
@@ -136,7 +136,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
         {/* Acordeón 2: Funcionamiento */}
         <div className="border rounded-md">
           <button 
-            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            className="w-full px-3 py-2 font-semibold  cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('funcionamiento')}
             aria-expanded={openAccordion === 'funcionamiento'}
           >
@@ -168,7 +168,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
         {/* Acordeón 3: Pluviometría */}
         <div className="border rounded-md">
           <button 
-            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            className="w-full px-3 py-2 font-semibold  cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('pluviometria')}
             aria-expanded={openAccordion === 'pluviometria'}
           >
@@ -194,7 +194,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
         {/* Acordeón 4: Instituciones */}
         <div className="border rounded-md">
           <button 
-            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            className="w-full px-3 py-2 font-semibold  cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('instituciones')}
             aria-expanded={openAccordion === 'instituciones'}
           >
@@ -223,7 +223,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
         {/* Acordeón 5: Contacto */}
         <div className="border rounded-md">
           <button 
-            className="w-full px-3 py-2 font-medium cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
+            className="w-full px-3 py-2 font-semibold  cursor-pointer text-left flex justify-between items-center hover:bg-gray-50"
             onClick={() => toggleAccordion('contacto')}
             aria-expanded={openAccordion === 'contacto'}
           >
