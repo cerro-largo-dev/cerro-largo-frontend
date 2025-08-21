@@ -206,10 +206,10 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
               <ul className="list-disc list-inside">
                 <li>Gobierno de Cerro Largo.</li>
                 <li>INUMET – Datos y Soporte.</li>
-                <li>Productores agropecuarios.</li>
-                <li>UPM / LUMIN / MINERVA / COLEME / ACA.</li>
+                <li>Productores Agropecuarios.</li>
                 <li>Transportistas y camioneros.</li>
-                <li>MTOP / OPP / FDI (Institucional).</li>
+                <li>MINERVA / UPM / LUMIN / COLEME / ACA.</li>
+                <li>MTOP / OPP / FDI .</li>
               </ul>
             </div>
           )}
