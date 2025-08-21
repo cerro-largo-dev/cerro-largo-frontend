@@ -1,3 +1,4 @@
+// src/components/SiteBanner.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 
 const CloseIcon = () => (
@@ -11,7 +12,7 @@ const CloseIcon = () => (
 export default function SiteBanner() {
   const [cfg, setCfg] = useState(null);
   const [leftOffset, setLeftOffset] = useState(92);
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
 
   const BACKEND_URL =
     (typeof window !== 'undefined' && window.BACKEND_URL) ||
@@ -29,45 +30,53 @@ export default function SiteBanner() {
   const parseMaybeJson = async (res) => {
     const ct = res.headers.get('content-type') || '';
     const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-    if (!ct.includes('application/json')) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 180)}`);
+    if (!ct.includes('application/json')) throw new Error(`No-JSON: ${text.slice(0, 180)}`);
     try { return JSON.parse(text); } catch { return {}; }
   };
 
   const storageKey = (meta) => {
-    // cambia el “versionado” si cambia updated_at o el texto
     const ver = (meta?.updated_at || '') + '|' + (meta?.text || '');
     return `siteBannerHidden:${ver}`;
   };
 
-  const fetchBanner = async () => {
-    // Solo usa el público; el admin lo consume desde /api/admin/banner
-    try {
-      const res = await fetch(API('/api/banner'), { credentials: 'include' });
-      const data = await parseMaybeJson(res);
+  const applyBanner = (data) => {
+    const enabled = !!data?.enabled;
+    const text = String(data?.text || '').trim();
+    if (!enabled || !text) {
+      setCfg(null);
+      setIsVisible(false);
+      return;
+    }
+    const next = {
+      enabled,
+      text,
+      variant: String(data?.variant || 'info').toLowerCase(),
+      link_text: String(data?.link_text || ''),
+      link_href: String(data?.link_href || ''),
+      id: String(data?.id || '1'),
+      updated_at: String(data?.updated_at || ''),
+    };
+    setCfg(next);
 
-      if (data && data.enabled && String(data.text || '').trim()) {
-        setCfg({
-          enabled: !!data.enabled,
-          text: String(data.text || ''),
-          variant: String(data.variant || 'info').toLowerCase(),
-          link_text: String(data.link_text || ''),
-          link_href: String(data.link_href || ''),
-          id: String(data.id || '1'),
-          updated_at: String(data.updated_at || ''),
-        });
-
-        // visibilidad: si lo cerré antes para ESTA versión, no lo muestro
-        const key = storageKey(data);
-        const hidden = localStorage.getItem(key) === '1';
-        setIsVisible(!hidden);
-        return;
-      }
-    } catch {}
-    setCfg(null);
-    setIsVisible(false);
+    // Si este banner se cerró (esta versión exacta), no lo muestres.
+    const key = storageKey(next);
+    const hidden = localStorage.getItem(key) === '1';
+    setIsVisible(!hidden);
   };
 
+  const fetchBanner = async () => {
+    try {
+      const res = await fetch(API('/api/banner'), { credentials: 'include', cache: 'no-store' });
+      const data = await parseMaybeJson(res);
+      applyBanner(data);
+    } catch (e) {
+      // Si hay error de red, no cambies el estado actual; evitás “parpadeos”
+      // console.warn('Banner fetch error:', e);
+    }
+  };
+
+  // Posición en función del FAB
   useEffect(() => {
     const compute = () => {
       const fab = document.querySelector('.report-fab');
@@ -81,34 +90,25 @@ export default function SiteBanner() {
     return () => window.removeEventListener('resize', compute);
   }, []);
 
-  useEffect(() => { fetchBanner(); }, []);
+  // Carga inicial + refresco periódico
+  useEffect(() => {
+    fetchBanner();
+    const t = setInterval(fetchBanner, 120000); // 2 minutos
+    return () => clearInterval(t);
+  }, []); // eslint-disable-line
 
+  // Live-update opcional desde el admin (ignora payloads inválidos)
   useEffect(() => {
     const h = (e) => {
-      const b = e?.detail || {};
-      if (b && b.enabled && String(b.text || '').trim()) {
-        setCfg({
-          enabled: !!b.enabled,
-          text: String(b.text || ''),
-          variant: String(b.variant || 'info').toLowerCase(),
-          link_text: String(b.link_text || ''),
-          link_href: String(b.link_href || ''),
-          id: String(b.id || '1'),
-          updated_at: String(b.updated_at || ''),
-        });
-        const key = storageKey(b);
-        const hidden = localStorage.getItem(key) === '1';
-        setIsVisible(!hidden);
-      } else {
-        setCfg(null);
-        setIsVisible(false);
-      }
+      const b = e?.detail;
+      if (b && b.enabled && String(b.text || '').trim()) applyBanner(b);
+      // si viene inválido, lo ignoramos (NO ocultamos el banner existente)
     };
     window.addEventListener('bannerUpdated', h);
     return () => window.removeEventListener('bannerUpdated', h);
   }, []);
 
-  if (!cfg || !cfg.enabled || !String(cfg.text || '').trim() || !isVisible) return null;
+  if (!cfg || !isVisible) return null;
 
   const palette =
     {
@@ -140,7 +140,7 @@ export default function SiteBanner() {
 
   const onClose = () => {
     const key = storageKey(cfg);
-    localStorage.setItem(key, '1');  // recordar el cierre para ESTA versión
+    localStorage.setItem(key, '1');  // recuerda cierre de ESTA versión
     setIsVisible(false);
   };
 
