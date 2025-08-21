@@ -1,7 +1,8 @@
 // src/App.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+// Componentes
 import MapComponent from "./components/MapComponent";
 import AdminPanel from "./components/AdminPanel";
 import ReportButton from "./components/Reportes/ReportButton";
@@ -15,7 +16,7 @@ import ReportsPanel from "./components/ReportsPanel";
 
 import "./App.css";
 
-// ---------------- util BACKEND_URL ----------------
+// ---------------------------- Util: BACKEND_URL ----------------------------
 function useBackendUrl() {
   useEffect(() => {
     const be =
@@ -28,6 +29,7 @@ function useBackendUrl() {
       "https://cerro-largo-backend.onrender.com";
     if (typeof window !== "undefined") window.BACKEND_URL = String(be).replace(/\/$/, "");
   }, []);
+
   return useMemo(() => {
     const be =
       (typeof window !== "undefined" && window.BACKEND_URL) ||
@@ -42,18 +44,20 @@ function useBackendUrl() {
   }, []);
 }
 
-// ---------------- AppShell: mapa siempre montado ----------------
-function AppShell() {
+// ---------------------------- Home Page (Mapa) ----------------------------
+function HomePage() {
   const BACKEND_URL = useBackendUrl();
-  const { pathname } = useLocation();
 
-  // estados mapa/paneles
+  // Estados del mapa/paneles
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // NUEVO: alertas visibles (del backend) → se pintan en el mapa
   const [alerts, setAlerts] = useState([]);
 
+  // Paneles / Modales
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
   const reportBtnRef = useRef(null);
@@ -66,73 +70,120 @@ function AppShell() {
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
+  // Helpers
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: "include", ...options });
     const ct = res.headers.get("content-type") || "";
     const text = await res.text();
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
     if (!ct.includes("application/json")) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
-    try { return JSON.parse(text); } catch { return {}; }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {};
+    }
   }, []);
 
-  // geo
+  // Geolocalización (fallback: Melo)
   useEffect(() => {
     const FALLBACK = { lat: -32.3667, lng: -54.1667 };
-    if (!navigator.geolocation) { setUserLocation(FALLBACK); return; }
+    if (!navigator.geolocation) {
+      setUserLocation(FALLBACK);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
-      (pos)=>setUserLocation({lat:pos.coords.latitude,lng:pos.coords.longitude}),
-      ()=>setUserLocation(FALLBACK),
-      { enableHighAccuracy:true, timeout:10000, maximumAge:300000 }
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setUserLocation(FALLBACK),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
     );
   }, []);
 
-  // zonas
+  // Cargar estados de zonas
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
       const data = await fetchJson(`${BACKEND_URL}/api/admin/zones/states`);
       if (data?.success && data.states) {
-        const m = {};
-        Object.entries(data.states).forEach(([name, info]) => { m[name] = info?.state || "red"; });
-        setZoneStates(m);
+        const mapping = {};
+        Object.entries(data.states).forEach(([name, info]) => {
+          mapping[name] = info?.state || "red";
+        });
+        setZoneStates(mapping);
       }
-    } finally { setRefreshing(false); }
+    } catch (e) {
+      console.warn("No se pudo refrescar estados:", e.message);
+    } finally {
+      setRefreshing(false);
+    }
   }, [BACKEND_URL, fetchJson]);
 
-  const handleZoneStateChange = (zone, st) => setZoneStates(p => ({...p,[zone]:st}));
-  const handleBulkZoneStatesUpdate = (u) => setZoneStates(p => ({...p, ...(u||{})}));
-  const handleZonesLoad = (z) => Array.isArray(z) && setZones(z);
-  const handleUserLocationChange = (loc) => loc && setUserLocation(loc);
+  const handleZoneStateChange = (zoneName, newStateEn) => {
+    setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
+  };
+  const handleBulkZoneStatesUpdate = (updatesMap) => {
+    if (!updatesMap || typeof updatesMap !== "object") return;
+    setZoneStates((prev) => ({ ...prev, ...updatesMap }));
+  };
+  const handleZonesLoad = (loadedZones) => {
+    if (Array.isArray(loadedZones)) setZones(loadedZones);
+  };
+  const handleUserLocationChange = (loc) => {
+    if (loc) setUserLocation(loc);
+  };
 
-  // alertas visibles
+  // Cargar alertas visibles (NUEVO)
   const loadAlerts = useCallback(async () => {
     try {
       const json = await fetchJson(`${BACKEND_URL}/api/reportes/visibles`);
       if (json?.ok && Array.isArray(json.reportes)) {
-        setAlerts(json.reportes
-          .filter(a => a.latitud!=null && a.longitud!=null)
-          .map(a => ({ id:a.id, lat:a.latitud, lng:a.longitud,
-                       titulo:a.nombre_lugar||"Reporte", descripcion:a.descripcion||"" })));
+        setAlerts(
+          json.reportes
+            .filter((a) => a.latitud != null && a.longitud != null)
+            .map((a) => ({
+              id: a.id,
+              lat: a.latitud,
+              lng: a.longitud,
+              titulo: a.nombre_lugar || "Reporte",
+              descripcion: a.descripcion || "",
+            }))
+        );
       }
-    } catch {}
+    } catch (e) {
+      // silencioso
+    }
   }, [BACKEND_URL, fetchJson]);
 
-  useEffect(() => { loadAlerts(); const t=setInterval(loadAlerts,30000); return ()=>clearInterval(t); }, [loadAlerts]);
+  useEffect(() => {
+    loadAlerts();
+    const t = setInterval(loadAlerts, 30000); // refrescar cada 30s
+    return () => clearInterval(t);
+  }, [loadAlerts]);
 
-  // UI
-  const toggleReportPanel = () => { const b=reportBtnRef.current; if(b) setReportAnchorRect(b.getBoundingClientRect()); setReportOpen(v=>!v); };
+  // UI handlers
+  const toggleReportPanel = () => {
+    const btn = reportBtnRef.current;
+    if (btn) setReportAnchorRect(btn.getBoundingClientRect());
+    setReportOpen((v) => !v);
+  };
   const closeReportPanel = () => setReportOpen(false);
-  const toggleInfo = () => { const b=infoBtnRef.current; if(b) setInfoAnchorRect(b.getBoundingClientRect()); setInfoOpen(v=>!v); };
-  const closeInfoPanel = () => setInfoOpen(false);
-  const handleToggleReportModal = () => { const b=reportFabRef.current; if(b) setReportModalAnchorRect(b.getBoundingClientRect()); setReportModalOpen(p=>!p); };
-  const closeReportModal = () => setReportModalOpen(false);
 
-  const isAdmin = /^\/admin(\/|$)/.test(pathname);
-  const isAdminReportes = pathname === "/admin/reportes";
+  const toggleInfo = () => {
+    const btn = infoBtnRef.current;
+    if (btn) setInfoAnchorRect(btn.getBoundingClientRect());
+    setInfoOpen((v) => !v);
+  };
+  const closeInfoPanel = () => setInfoOpen(false);
+
+  const handleToggleReportModal = () => {
+    const btn = reportFabRef.current;
+    if (btn) setReportModalAnchorRect(btn.getBoundingClientRect());
+    setReportModalOpen((prev) => !prev);
+  };
+  const closeReportModal = () => setReportModalOpen(false);
 
   return (
     <div className="relative w-full h-screen">
-      {/* barra superior */}
+      {/* Botones barra superior */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
           onClick={handleRefreshZoneStates}
@@ -153,65 +204,73 @@ function AppShell() {
         </button>
       </div>
 
-      {/* Mapa SIEMPRE */}
+      {/* Mapa */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
-        onZoneStatesLoad={(s)=>s && setZoneStates(s)}
+        onZoneStatesLoad={(initialStates) => initialStates && setZoneStates(initialStates)}
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
-        alerts={alerts}
+        alerts={alerts}   // <--- NUEVO: marcadores de atención
       />
 
-      {/* FABs */}
-      <div className="fixed z-[1000] flex flex-col items-start gap-2"
-           style={{ bottom:"max(1rem, env(safe-area-inset-bottom, 1rem))",
-                    left:"max(1rem, env(safe-area-inset-left, 1rem))" }}>
-        <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen}/>
-        <ReportButton ref={reportFabRef} onClick={handleToggleReportModal} onLocationChange={handleUserLocationChange}/>
+      {/* FABs inferior-izquierda */}
+      <div
+        className="fixed z-[1000] flex flex-col items-start gap-2"
+        style={{
+          bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))",
+          left: "max(1rem, env(safe-area-inset-left, 1rem))",
+        }}
+      >
+        <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
+        <ReportButton
+          ref={reportFabRef}
+          onClick={handleToggleReportModal}
+          onLocationChange={handleUserLocationChange}
+        />
       </div>
 
-      {/* Paneles comunes */}
-      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel}/>
-      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} buttonRef={infoBtnRef}/>
-      <ReportModal open={reportModalOpen} anchorRect={reportModalAnchorRect} onClose={closeReportModal} onLocationChange={handleUserLocationChange}/>
+      {/* Paneles y modales */}
+      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
+      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} buttonRef={infoBtnRef} />
+      <ReportModal
+        open={reportModalOpen}
+        anchorRect={reportModalAnchorRect}
+        onClose={closeReportModal}
+        onLocationChange={handleUserLocationChange}
+      />
 
-      {/* Overlays ADMIN encima del mapa */}
-      {isAdmin && !isAdminReportes && (
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="pointer-events-auto">
-            <AdminPanel
-              onRefreshZoneStates={handleRefreshZoneStates}
-              onBulkZoneStatesUpdate={handleBulkZoneStatesUpdate}
-              onZoneStateChange={handleZoneStateChange}
-            />
-          </div>
-        </div>
-      )}
-
-      {isAdminReportes && (
-        <div className="absolute inset-0 bg-transparent pointer-events-none">
-          <div className="pointer-events-auto">
-            <ReportsPanel />
-          </div>
-        </div>
-      )}
-
+      {/* Alertas y banner */}
       <AlertWidget />
       <SiteBanner />
     </div>
   );
 }
 
-// ---------------- Router ----------------
+// ---------------------------- App con Router ----------------------------
 export default function App() {
-  useBackendUrl();
+  useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
+
   return (
     <BrowserRouter>
-      {/* el mapa vive en AppShell y las rutas solo controlan overlays */}
       <Routes>
-        <Route path="/*" element={<AppShell />} />
+        <Route path="/" element={<HomePage />} />
+
+        <Route
+          path="/admin"
+          element={
+            <AdminPanel
+              onRefreshZoneStates={() => {}}
+              onBulkZoneStatesUpdate={() => {}}
+              onZoneStateChange={() => {}}
+            />
+          }
+        />
+
+        <Route path="/admin/reportes" element={<ReportsPanel />} />
+
+        <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
   );
