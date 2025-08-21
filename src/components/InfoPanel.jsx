@@ -151,10 +151,15 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
           {openAccordion === 'funcionamiento' && (
             <div className="px-4 pb-3">
               <ul className="list-disc list-inside">
-                <li>Reportes ciudadanos de caminos.</li>
-                <li>Pluviómetros e integración automática.</li>
+                <li>Descargas alertas en PDF de Cerro Largo.</li>
+                <li>Realizar denuncias y reportes de caminos.</li>
+                 <li>Suscribirte a alertas por Whatshapp.</li>
+                <li>Pluviómetros digitales automáticos.</li>
                 <li>Alertas por color: verde, amarillo, rojo.</li>
-                <li>Administrador puede validar o anular alertas.</li>
+                 <li>Conectado en tiempo real.</li>
+                  <li>Mensajes en pantalla, AVISOS a la comunidad.</li>
+                 <li>Visualizar cortes/roturas/accidentes.</li>
+                <li>Alcaldes pueden validar o anular alertas.</li>
               </ul>
             </div>
           )}
@@ -180,7 +185,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
               <ul className="list-disc list-inside">
                 <li>Verde = habilitado; Amarillo = precaución (2–5 mm/h); Rojo = cierre (&gt;5 mm/h).</li>
                 <li>Acumulados 48 h avalan cierres automáticos.</li>
-                <li>Sin lluvias 12 h → se desactiva alerta.</li>
+                <li>Sin lluvias 6 h → se desactiva alerta.</li>
               </ul>
             </div>
           )}
@@ -204,12 +209,12 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
           {openAccordion === 'instituciones' && (
             <div className="px-4 pb-3">
               <ul className="list-disc list-inside">
-                <li>Gobierno Departamental de Cerro Largo.</li>
-                <li>INUMET – Datos y soporte técnico.</li>
+                <li>Gobierno de Cerro Largo.</li>
+                <li>INUMET – Datos y Soporte.</li>
                 <li>Productores agropecuarios.</li>
                 <li>UPM / LUMIN / MINERVA / COLEME / ACA.</li>
-                <li>Transportistas &amp; camioneros.</li>
-                <li>MTOP / OPP / FDI (apoyo institucional).</li>
+                <li>Transportistas y camioneros.</li>
+                <li>MTOP / OPP / FDI (Institucional).</li>
               </ul>
             </div>
           )}
@@ -222,7 +227,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
             onClick={() => toggleAccordion('contacto')}
             aria-expanded={openAccordion === 'contacto'}
           >
-            5. Contacto – Intendencia de Cerro Largo
+            5. Contacto – Gobierno de Cerro Largo
             <svg 
               className={`h-4 w-4 transition-transform ${openAccordion === 'contacto' ? 'rotate-180' : ''}`} 
               viewBox="0 0 24 24" fill="none" stroke="currentColor"
