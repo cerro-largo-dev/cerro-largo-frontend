@@ -1,19 +1,39 @@
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+Te dejo el **`index.html`** corregido (título, descripción, fuente Montserrat y metatags). Pegalo tal cual:
 
-  <!-- Título del sitio -->
-  <title>Caminos que conectan - Gobierno de Cerro Largo</title>
+> Basado en tu archivo actual.&#x20;
 
-  <!-- Descripción -->
-  <meta name="description" content="Plataforma digital que permite monitorear, reportar y gestionar en tiempo real el estado de los caminos rurales." />
+```html
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Fuente Montserrat con varios pesos -->
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <!-- Título y SEO -->
+    <title>Caminos que conectan - Gobierno de Cerro Largo</title>
+    <meta name="description" content="Plataforma digital que permite monitorear, reportar y gestionar en tiempo real el estado de los caminos rurales." />
+    <meta name="theme-color" content="#0f172a" />
 
-  <!-- Favicon (si tenés logo.ico en /public) -->
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <!-- Open Graph / Social -->
+    <meta property="og:title" content="Caminos que conectan - Gobierno de Cerro Largo" />
+    <meta property="og:description" content="Plataforma digital que permite monitorear, reportar y gestionar en tiempo real el estado de los caminos rurales." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_UY" />
 
-  <!-- Tu CSS compilado -->
-  <link rel="stylesheet" href="/src/App.css" />
-</head>
+    <!-- Fuente Montserrat (400,500,600,700,900) -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  </head>
+  <body>
+    <noscript>Esta aplicación requiere JavaScript habilitado.</noscript>
+    <div id="root"></div>
+
+    <!-- Entrada Vite/React -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+```
+
+Si sigue “en blanco”, mirá la consola del navegador (`F12 → Console`) por errores de JS del frontend; el HTML ya está ok.
