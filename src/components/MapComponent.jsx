@@ -1,3 +1,4 @@
+// src/components/MapComponent.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
@@ -6,7 +7,7 @@ import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
 import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
 import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
-// Configurar iconos de Leaflet
+// Configurar iconos de Leaflet (por defecto)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -14,7 +15,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Icono GPS
+// Ícono GPS (SVG)
 const gpsIcon = new L.Icon({
   iconUrl:
     'data:image/svg+xml;base64,' +
@@ -32,6 +33,30 @@ const gpsIcon = new L.Icon({
   className: 'gps-marker-icon',
 });
 
+// Ícono de ATENCIÓN estilo Waze (triángulo amarillo con signo)
+// SVG inline para performance y sin dependencias externas.
+const attentionIcon = L.divIcon({
+  className: 'attention-pin',
+  html: `
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
+      <g>
+        <!-- Borde negro para contraste -->
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              fill="#000000"/>
+        <!-- Triángulo amarillo -->
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              fill="#F59E0B" transform="scale(0.9) translate(1.3,1.3)"/>
+        <!-- Signo de exclamación -->
+        <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
+        <circle cx="12" cy="16.5" r="1.2" fill="#111827"/>
+      </g>
+    </svg>
+  `,
+  iconSize: [34, 34],
+  iconAnchor: [17, 30],
+  popupAnchor: [0, -26],
+});
+
 // Colores para estados
 const stateColors = {
   green: '#22c55e',
@@ -46,13 +71,9 @@ function ZoomHandler({ onZoomChange }) {
   const map = useMap();
 
   useEffect(() => {
-    const handleZoom = () => {
-      onZoomChange(map.getZoom());
-    };
-
+    const handleZoom = () => onZoomChange(map.getZoom());
     map.on('zoomend', handleZoom);
     onZoomChange(map.getZoom());
-
     return () => {
       map.off('zoomend', handleZoom);
     };
@@ -67,6 +88,8 @@ function MapComponent({
   onZoneStateChange,
   onZonesLoad,
   userLocation,
+  // NUEVO: alertas a pintar en el mapa: [{ id, lat, lng, titulo, descripcion }]
+  alerts = [],
 }) {
   const [geoData, setGeoData] = useState(null);
   const [meloAreaGeoData, setMeloAreaGeoData] = useState(null);
@@ -78,10 +101,7 @@ function MapComponent({
   const mapRef = useRef(null);
 
   const mapCenter = [-32.35, -54.20];
-
   const handleZoomChange = (newZoom) => setCurrentZoom(newZoom);
-
-  const getRoadStyleWithZoom = (feature) => getRoadStyle(feature, currentZoom);
 
   useEffect(() => {
     const loadData = async () => {
@@ -229,7 +249,7 @@ function MapComponent({
 
   return (
     <div className="relative w-full h-screen">
-      {/* Mensajes de estado (se mantienen) */}
+      {/* Mensajes de estado */}
       {message.text && (
         <div
           className={`absolute top-4 left-4 z-[1000] p-3 rounded-lg ${
@@ -237,13 +257,9 @@ function MapComponent({
           }`}
         >
           {message.text}
-          <button onClick={() => setMessage({ type: '', text: '' })} className="ml-2 text-sm">
-            ✕
-          </button>
+          <button onClick={() => setMessage({ type: '', text: '' })} className="ml-2 text-sm">✕</button>
         </div>
       )}
-
-      {/* (Los botones de “Actualizar Mapa” y “Reporte” fueron movidos a App.jsx) */}
 
       <MapContainer
         center={mapCenter}
@@ -285,6 +301,7 @@ function MapComponent({
           />
         )}
 
+        {/* Marcador de la ubicación del usuario */}
         {userLocation && (
           <Marker position={[userLocation.lat, userLocation.lng]} icon={gpsIcon}>
             <Popup>
@@ -300,6 +317,22 @@ function MapComponent({
             </Popup>
           </Marker>
         )}
+
+        {/* NUEVO: Marcadores de ALERTA (visibles desde el admin) */}
+        {Array.isArray(alerts) &&
+          alerts.map((a) =>
+            a && a.lat != null && a.lng != null ? (
+              <Marker key={`alert-${a.id}`} position={[a.lat, a.lng]} icon={attentionIcon}>
+                <Popup>
+                  <div style={{ minWidth: 180 }}>
+                    <strong>{a.titulo || 'Reporte'}</strong>
+                    <br />
+                    <small>{a.descripcion || ''}</small>
+                  </div>
+                </Popup>
+              </Marker>
+            ) : null
+          )}
 
         <ZoomHandler onZoomChange={setCurrentZoom} />
       </MapContainer>
