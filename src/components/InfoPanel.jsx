@@ -241,7 +241,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
 
         {/* Pie con logos */}
         <div className="pt-2 border-t flex justify-center">
-          <img src="/gobcerro.png" alt="Logo del Gobierno de Cerro Largo" className="h-10" />
+          <img src="/logocerrolargo.webp" alt="Logo del Gobierno de Cerro Largo" className="h-10" />
         </div>
       </div>
     </div>
