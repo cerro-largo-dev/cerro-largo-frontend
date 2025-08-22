@@ -1,9 +1,10 @@
 // src/App.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Componentes principales (que sí usamos en Home)
+// Componentes
 import MapComponent from "./components/MapComponent";
+import AdminPanel from "./components/AdminPanel";
 import ReportButton from "./components/Reportes/ReportButton";
 import ReportModal from "./components/Reportes/ReportModal";
 import ReportHubPanel from "./components/ReportHubPanel";
@@ -11,10 +12,7 @@ import InfoButton from "./components/InfoButton";
 import InfoPanel from "./components/InfoPanel";
 import SiteBanner from "./components/SiteBanner";
 import AlertWidget from "./components/AlertWidget";
-
-// ⚠️ Admin y ReportsPanel → LAZY (no cargan hasta entrar a la ruta /admin o /admin/reportes)
-const AdminPanel = React.lazy(() => import("./components/AdminPanel"));
-const ReportsPanel = React.lazy(() => import("./components/ReportsPanel"));
+import ReportsPanel from "./components/ReportsPanel";
 
 import "./App.css";
 
@@ -53,13 +51,10 @@ function HomePage() {
   // Estados del mapa/paneles
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
-
-  // Mantengo userLocation sólo para ReportButton/ReportModal si lo necesitan
   const [userLocation, setUserLocation] = useState(null);
-
   const [refreshing, setRefreshing] = useState(false);
 
-  // Alertas de reportes ciudadanos (se pintan como marcadores en el mapa)
+  // NUEVO: alertas visibles (del backend) → se pintan en el mapa
   const [alerts, setAlerts] = useState([]);
 
   // Paneles / Modales
@@ -75,7 +70,7 @@ function HomePage() {
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
-  // Helper fetch JSON robusto
+  // Helpers
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: "include", ...options });
     const ct = res.headers.get("content-type") || "";
@@ -89,20 +84,30 @@ function HomePage() {
     }
   }, []);
 
-  // Cargar estados de zonas a demanda (botón "Actualizar Mapa")
+  // Geolocalización (fallback: Melo)
+  useEffect(() => {
+    const FALLBACK = { lat: -32.3667, lng: -54.1667 };
+    if (!navigator.geolocation) {
+      setUserLocation(FALLBACK);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setUserLocation(FALLBACK),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+  }, []);
+
+  // Cargar estados de zonas
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
       const data = await fetchJson(`${BACKEND_URL}/api/admin/zones/states`);
-      const mapping = {};
-      if (data?.states && typeof data.states === "object") {
+      if (data?.success && data.states) {
+        const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
-          const v = typeof info === "string" ? info : info?.state;
-          mapping[name] = v || "red";
+          mapping[name] = info?.state || "red";
         });
-        setZoneStates(mapping);
-      } else if (data && typeof data === "object") {
-        Object.entries(data).forEach(([name, v]) => (mapping[name] = String(v || "red")));
         setZoneStates(mapping);
       }
     } catch (e) {
@@ -112,7 +117,6 @@ function HomePage() {
     }
   }, [BACKEND_URL, fetchJson]);
 
-  // Callbacks para MapComponent
   const handleZoneStateChange = (zoneName, newStateEn) => {
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
   };
@@ -127,7 +131,7 @@ function HomePage() {
     if (loc) setUserLocation(loc);
   };
 
-  // Cargar reportes ciudadanos visibles (no bloquea el primer pintado)
+  // Cargar alertas visibles (NUEVO)
   const loadAlerts = useCallback(async () => {
     try {
       const json = await fetchJson(`${BACKEND_URL}/api/reportes/visibles`);
@@ -144,14 +148,14 @@ function HomePage() {
             }))
         );
       }
-    } catch {
+    } catch (e) {
       // silencioso
     }
   }, [BACKEND_URL, fetchJson]);
 
   useEffect(() => {
     loadAlerts();
-    const t = setInterval(loadAlerts, 30000); // refresco cada 30s
+    const t = setInterval(loadAlerts, 30000); // refrescar cada 30s
     return () => clearInterval(t);
   }, [loadAlerts]);
 
@@ -200,14 +204,15 @@ function HomePage() {
         </button>
       </div>
 
-      {/* Mapa: ahora NO pasamos userLocation (lo gestiona internamente para no bloquear) */}
+      {/* Mapa */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
         onZoneStatesLoad={(initialStates) => initialStates && setZoneStates(initialStates)}
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
-        alerts={alerts}   // marcadores de reportes ciudadanos (se cargan en segundo plano)
+        userLocation={userLocation}
+        alerts={alerts}   // <--- NUEVO: marcadores de atención
       />
 
       {/* FABs inferior-izquierda */}
@@ -236,7 +241,7 @@ function HomePage() {
         onLocationChange={handleUserLocationChange}
       />
 
-      {/* Alertas (INUMET widget) y banner — no bloquean el mapa */}
+      {/* Alertas y banner */}
       <AlertWidget />
       <SiteBanner />
     </div>
@@ -245,35 +250,25 @@ function HomePage() {
 
 // ---------------------------- App con Router ----------------------------
 export default function App() {
-  useBackendUrl(); // publica BACKEND_URL en window
+  useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
 
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
 
-        {/* Admin y reportes: LAZY + Suspense (no cargan en la home) */}
         <Route
           path="/admin"
           element={
-            <Suspense fallback={null}>
-              <AdminPanel
-                onRefreshZoneStates={() => {}}
-                onBulkZoneStatesUpdate={() => {}}
-                onZoneStateChange={() => {}}
-              />
-            </Suspense>
+            <AdminPanel
+              onRefreshZoneStates={() => {}}
+              onBulkZoneStatesUpdate={() => {}}
+              onZoneStateChange={() => {}}
+            />
           }
         />
 
-        <Route
-          path="/admin/reportes"
-          element={
-            <Suspense fallback={null}>
-              <ReportsPanel />
-            </Suspense>
-          }
-        />
+        <Route path="/admin/reportes" element={<ReportsPanel />} />
 
         <Route path="*" element={<HomePage />} />
       </Routes>
