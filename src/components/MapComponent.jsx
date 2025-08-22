@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
-import municipalitiesDataUrl from '../assets/combined_polygons.geojson?url';
+import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
 import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
 import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
 import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
