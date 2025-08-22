@@ -152,7 +152,7 @@ export default function InfoPanel({ open = false, anchorRect = null, onClose, bu
             <div className="px-4 pb-3">
               <ul className="list-disc list-inside">
                 <li>Descargas alertas en PDF.</li>
-                <li>Realizar denuncias y cortes.</li>
+                <li>Reportes ciudadanos.</li>
                  <li>Suscribirte por Whatshapp.</li>
                   <li>AVISOS a la comunidad.</li>
                  <li>Visualizar cortes - roturas - accidentes.</li>
