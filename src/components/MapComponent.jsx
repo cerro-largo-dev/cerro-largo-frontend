@@ -4,21 +4,19 @@ import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-l
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// TopoJSON "simple": trae un FeatureCollection dentro de topo.objects
-import polygonsTopoUrl from '../assets/combined_polygons.topojson?url';
-import caminosTopoUrl from '../assets/camineria_cerro_largo.topojson?url';
+// Archivos TopoJSON SERVIDOS desde /public/data (no usar imports con ?url)
+const POLY_URL = '/data/combined_polygons.topojson';
+const CAMINOS_URL = '/data/camineria_cerro_largo.topojson';
 
-import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
-
-// ============ Leaflet default icons ============
+// ================== Iconos Leaflet por defecto ==================
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// Ícono GPS
+// Ícono GPS (SVG)
 const gpsIcon = new L.Icon({
   iconUrl:
     'data:image/svg+xml;base64,' +
@@ -34,7 +32,7 @@ const gpsIcon = new L.Icon({
   className: 'gps-marker-icon',
 });
 
-// Ícono alerta
+// Ícono de alerta
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
@@ -53,9 +51,12 @@ const attentionIcon = L.divIcon({
   popupAnchor: [0, -26],
 });
 
+// ================== Constantes / helpers ==================
 const stateColors = { green: '#22c55e', yellow: '#eab308', red: '#ef4444' };
+const supportsIdle = typeof window !== 'undefined' && 'requestIdleCallback' in window;
+const rIC = (fn, timeout = 1000) =>
+  supportsIdle ? window.requestIdleCallback(fn, { timeout }) : setTimeout(fn, 0);
 
-// ============ Zoom hook ============
 function ZoomHandler({ onZoomChange }) {
   const map = useMap();
   useEffect(() => {
@@ -67,13 +68,26 @@ function ZoomHandler({ onZoomChange }) {
   return null;
 }
 
+// Estilo básico para caminería (si tenías utils externas, podés reemplazar estos helpers)
+function getRoadStyle(_feature, zoom) {
+  return {
+    color: '#334155',
+    weight: Math.max(1, (zoom - 8) * 0.8),
+    opacity: 0.8,
+  };
+}
+function onEachRoadFeature(f, layer) {
+  const name = f?.properties?.nombre || f?.properties?.name;
+  if (name) layer.bindPopup(`<b>${name}</b>`);
+}
+
 export default function MapComponent({
-  zoneStates: zoneStatesProp = {},
-  onZoneStatesLoad,
-  onZoneStateChange,
-  onZonesLoad,
-  alerts: alertsProp,
+  zoneStates: zoneStatesProp = {},      // opcional: estados que vengan de App
+  onZoneStatesLoad,                     // callback(map)
+  onZonesLoad,                          // callback(array)
+  alerts: alertsProp,                   // marcadores externos opcionales
 }) {
+  // ===== Estado interno =====
   const [loadingMsg, setLoadingMsg] = useState('Cargando mapa…');
   const [errorMsg, setErrorMsg] = useState('');
   const [zoom, setZoom] = useState(9);
@@ -83,14 +97,17 @@ export default function MapComponent({
 
   const [zones, setZones] = useState([]);
   const [zoneStatesInternal, setZoneStatesInternal] = useState({});
-  const displayStates = useMemo(() => ({ ...zoneStatesInternal, ...zoneStatesProp }), [zoneStatesInternal, zoneStatesProp]);
+  const displayStates = useMemo(
+    () => ({ ...zoneStatesInternal, ...zoneStatesProp }),
+    [zoneStatesInternal, zoneStatesProp]
+  );
 
   const [userLoc, setUserLoc] = useState(null);
   const [alertPoints, setAlertPoints] = useState([]);
 
   const mapRef = useRef(null);
 
-  // BACKEND_URL
+  // ===== BACKEND_URL coherente con App.jsx =====
   const BACKEND_URL = useMemo(() => {
     const fromWin = typeof window !== 'undefined' && window.BACKEND_URL ? String(window.BACKEND_URL) : '';
     const envs =
@@ -100,20 +117,18 @@ export default function MapComponent({
     return (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
   }, []);
 
-  // ---- Helpers ----
-  // Nuestros .topojson son “simples”: contienen un GeoJSON en topo.objects[...]
+  // ===== Fetch helpers =====
+  // Nuestros .topojson son “simples”: contienen un FeatureCollection en topo.objects[<clave>]
   const fetchTopoSimple = useCallback(async (url) => {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const topo = await res.json();
     const objects = topo?.objects || {};
-    const first = objects[Object.keys(objects)[0]];
-    // Esperamos un FeatureCollection
+    const firstKey = Object.keys(objects)[0];
+    const first = objects[firstKey];
     if (first?.type === 'FeatureCollection' && Array.isArray(first.features)) return first;
-    // Por si fuera un Feature único
     if (first?.type === 'Feature') return { type: 'FeatureCollection', features: [first] };
-    // Si vino GeoJSON “plano”
-    if (topo?.type === 'FeatureCollection') return topo;
+    if (topo?.type === 'FeatureCollection') return topo; // por si vino GeoJSON plano
     throw new Error('TopoJSON inesperado');
   }, []);
 
@@ -135,13 +150,13 @@ export default function MapComponent({
     }
   }, []);
 
-  // ========== FASE 1: Polígonos + estados ==========
+  // ===== FASE 1: Polígonos + estados =====
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setLoadingMsg('Cargando polígonos…');
-        const polyGeo = await fetchTopoSimple(polygonsTopoUrl);
+        const polyGeo = await fetchTopoSimple(POLY_URL);
         if (!alive) return;
         setPolygonsData(polyGeo);
 
@@ -182,102 +197,73 @@ export default function MapComponent({
     return () => { alive = false; };
   }, [BACKEND_URL, fetchJsonRetry, fetchTopoSimple, onZonesLoad, onZoneStatesLoad]);
 
-  // ========== FASE 2: Caminería (diferida) ==========
+  // ===== FASE 2: Caminería (diferida por zoom/idle) =====
   useEffect(() => {
     if (roadsData) return;
+
     const tryLoad = () => {
       if (roadsData) return;
       const z = mapRef.current?.getZoom?.() ?? zoom;
       if (z >= 10) {
-        fetchTopoSimple(caminosTopoUrl).then(setRoadsData).catch(() => {});
+        fetchTopoSimple(CAMINOS_URL).then(setRoadsData).catch(() => {});
       } else {
-        const id = (typeof window !== 'undefined' && 'requestIdleCallback' in window)
-          ? window.requestIdleCallback(() => { if (!roadsData) fetchTopoSimple(caminosTopoUrl).then(setRoadsData).catch(() => {}); }, { timeout: 1200 })
-          : setTimeout(() => { if (!roadsData) fetchTopoSimple(caminosTopoUrl).then(setRoadsData).catch(() => {}); }, 0);
-        return () => (window.cancelIdleCallback ? window.cancelIdleCallback(id) : clearTimeout(id));
+        rIC(() => { if (!roadsData) fetchTopoSimple(CAMINOS_URL).then(setRoadsData).catch(() => {}); }, 1200);
       }
     };
+
     tryLoad();
     const h = () => tryLoad();
     mapRef.current?.on?.('zoomend', h);
     return () => mapRef.current?.off?.('zoomend', h);
   }, [roadsData, zoom, fetchTopoSimple]);
 
-  // ========== FASE 3: Geolocalización ==========
+  // ===== FASE 3: Geolocalización (diferida) =====
   useEffect(() => {
     if (userLoc) return;
-    const id = (typeof window !== 'undefined' && 'requestIdleCallback' in window)
-      ? window.requestIdleCallback(() => {
-          if (!navigator.geolocation) return;
-          navigator.geolocation.getCurrentPosition(
-            (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            () => {},
-            { enableHighAccuracy: false, maximumAge: 30000, timeout: 3000 }
-          );
-        }, { timeout: 800 })
-      : setTimeout(() => {
-          if (!navigator.geolocation) return;
-          navigator.geolocation.getCurrentPosition(
-            (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            () => {},
-            { enableHighAccuracy: false, maximumAge: 30000, timeout: 3000 }
-          );
-        }, 800);
-    return () => (window.cancelIdleCallback ? window.cancelIdleCallback(id) : clearTimeout(id));
+    const id = rIC(() => {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { enableHighAccuracy: false, maximumAge: 30000, timeout: 3000 }
+      );
+    }, 800);
+    return () => (supportsIdle ? window.cancelIdleCallback?.(id) : clearTimeout(id));
   }, [userLoc]);
 
-  // ========== FASE 4: Alertas (si no vienen por props) ==========
+  // ===== FASE 4: Alertas (INUMET) si no vienen por props =====
   useEffect(() => {
     if (alertsProp && Array.isArray(alertsProp)) {
       setAlertPoints(alertsProp);
       return;
     }
     let alive = true;
-    const id = (typeof window !== 'undefined' && 'requestIdleCallback' in window)
-      ? window.requestIdleCallback(async () => {
-          try {
-            const data = await fetchJsonRetry(`${BACKEND_URL}/api/inumet/alerts/cerro-largo`);
-            if (!alive) return;
-            const pts = [];
-            if (Array.isArray(data?.features)) {
-              data.features.forEach((f, idx) => {
-                const c = f.geometry?.coordinates;
-                if (Array.isArray(c) && c.length >= 2) {
-                  pts.push({
-                    id: f.id || idx, lat: c[1], lng: c[0],
-                    titulo: f.properties?.headline || 'Alerta',
-                    descripcion: f.properties?.description || '',
-                  });
-                }
+    const id = rIC(async () => {
+      try {
+        const data = await fetchJsonRetry(`${BACKEND_URL}/api/inumet/alerts/cerro-largo`);
+        if (!alive) return;
+        const pts = [];
+        if (Array.isArray(data?.features)) {
+          data.features.forEach((f, idx) => {
+            const c = f.geometry?.coordinates;
+            if (Array.isArray(c) && c.length >= 2) {
+              pts.push({
+                id: f.id || idx,
+                lat: c[1],
+                lng: c[0],
+                titulo: f.properties?.headline || 'Alerta',
+                descripcion: f.properties?.description || '',
               });
             }
-            setAlertPoints(pts);
-          } catch {}
-        }, { timeout: 1200 })
-      : setTimeout(async () => {
-          try {
-            const data = await fetchJsonRetry(`${BACKEND_URL}/api/inumet/alerts/cerro-largo`);
-            if (!alive) return;
-            const pts = [];
-            if (Array.isArray(data?.features)) {
-              data.features.forEach((f, idx) => {
-                const c = f.geometry?.coordinates;
-                if (Array.isArray(c) && c.length >= 2) {
-                  pts.push({
-                    id: f.id || idx, lat: c[1], lng: c[0],
-                    titulo: f.properties?.headline || 'Alerta',
-                    descripcion: f.properties?.description || '',
-                  });
-                }
-              });
-            }
-            setAlertPoints(pts);
-          } catch {}
-        }, 1200);
-    return () => { alive = false; window.cancelIdleCallback ? window.cancelIdleCallback(id) : clearTimeout(id); };
+          });
+        }
+        setAlertPoints(pts);
+      } catch {}
+    }, 1200);
+    return () => { alive = false; supportsIdle ? window.cancelIdleCallback?.(id) : clearTimeout(id); };
   }, [alertsProp, BACKEND_URL, fetchJsonRetry]);
 
-  // ========== Escuchar actualizaciones desde Admin ==========
+  // ===== Escuchar cambios desde Admin =====
   useEffect(() => {
     const h = async () => {
       try {
@@ -300,7 +286,7 @@ export default function MapComponent({
     return () => window.removeEventListener('zoneStateUpdated', h);
   }, [BACKEND_URL, fetchJsonRetry, onZoneStatesLoad]);
 
-  // ========== Estilos y popups ==========
+  // ===== Estilo y popups =====
   const stateLabel = (s) => (s === 'yellow' ? 'Alerta' : s === 'red' ? 'Suspendido' : 'Habilitado');
   const styleFeature = (feature) => {
     let name;
@@ -321,6 +307,12 @@ export default function MapComponent({
       mouseout: (e) => e.target.setStyle({ fillOpacity: 0.6 }),
     });
   };
+
+  // key que fuerza remount cuando cambian estados → re-estila colores
+  const polysKey = useMemo(
+    () => `polys-${Object.keys(displayStates).sort().map(k => `${k}:${displayStates[k]}`).join('|')}`,
+    [displayStates]
+  );
 
   return (
     <div className="relative w-full h-screen">
@@ -347,9 +339,14 @@ export default function MapComponent({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* FASE 1: polígonos */}
+        {/* FASE 1: polígonos + colores */}
         {polygonsData && (
-          <GeoJSON data={polygonsData} style={styleFeature} onEachFeature={onEachFeature} />
+          <GeoJSON
+            key={polysKey}
+            data={polygonsData}
+            style={styleFeature}
+            onEachFeature={onEachFeature}
+          />
         )}
 
         {/* FASE 2: caminería (diferida) */}
