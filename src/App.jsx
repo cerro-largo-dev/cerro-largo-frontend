@@ -251,6 +251,24 @@ function HomePage() {
 // ---------------------------- App con Router ----------------------------
 export default function App() {
   useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
+export default function App() {
+  useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
+
+  // REGISTRO SW (una vez)
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      const onLoad = () => navigator.serviceWorker.register('/sw.js').catch(() => {});
+      window.addEventListener('load', onLoad);
+      return () => window.removeEventListener('load', onLoad);
+    }
+  }, []);
+
+  return (
+    <BrowserRouter>
+      {/* ... tus rutas ... */}
+    </BrowserRouter>
+  );
+}
 
   return (
     <BrowserRouter>
