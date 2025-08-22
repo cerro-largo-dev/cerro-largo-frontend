@@ -5,8 +5,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 // TopoJSON "simple": trae un FeatureCollection dentro de topo.objects
-import polygonsTopoUrl from '../assets/combined_polygons.topojson?url';
-import caminosTopoUrl from '../assets/camineria_cerro_largo.topojson?url';
+import polygonsTopoUrl from '../combined_polygons.topojson?url';
+import caminosTopoUrl from '../camineria_cerro_largo.topojson?url';
 
 import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
