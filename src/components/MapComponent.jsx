@@ -2,43 +2,45 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import municipalitiesDataUrl from '../assets/combined_polygons.geojson?url';
+import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
+import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
+import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
-// Archivos TopoJSON SERVIDOS desde /public/data (no usar imports con ?url)
-const POLY_URL = '/data/combined_polygons.topojson';
-const CAMINOS_URL = '/data/camineria_cerro_largo.topojson';
-
-// ================== Iconos Leaflet por defecto ==================
+// Configurar iconos de Leaflet (por defecto)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
 // Ícono GPS (SVG)
 const gpsIcon = new L.Icon({
   iconUrl:
     'data:image/svg+xml;base64,' +
-    btoa(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="24" height="24">
-        <circle cx="12" cy="12" r="8" fill="#3b82f6" stroke="#ffffff" stroke-width="2"/>
-        <circle cx="12" cy="12" r="4" fill="#ffffff"/>
-      </svg>
-    `.trim()),
+    btoa(
+      `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="24" height="24">
+          <circle cx="12" cy="12" r="8" fill="#3b82f6" stroke="#ffffff" stroke-width="2"/>
+          <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+        </svg>
+      `.trim()
+    ),
   iconSize: [24, 24],
   iconAnchor: [12, 12],
   popupAnchor: [0, -12],
   className: 'gps-marker-icon',
 });
 
-// Ícono de alerta
+// Ícono de ATENCIÓN estilo Waze (triángulo amarillo con signo)
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
     <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
       <g>
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="#000000"/>
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              fill="#000000"/>
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
               fill="#F59E0B" transform="scale(0.9) translate(1.3,1.3)"/>
         <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
@@ -51,335 +53,336 @@ const attentionIcon = L.divIcon({
   popupAnchor: [0, -26],
 });
 
-// ================== Constantes / helpers ==================
-const stateColors = { green: '#22c55e', yellow: '#eab308', red: '#ef4444' };
-const supportsIdle = typeof window !== 'undefined' && 'requestIdleCallback' in window;
-const rIC = (fn, timeout = 1000) =>
-  supportsIdle ? window.requestIdleCallback(fn, { timeout }) : setTimeout(fn, 0);
+// Colores para estados
+const stateColors = {
+  green: '#22c55e',
+  yellow: '#eab308',
+  red: '#ef4444',
+};
 
+// Manejar eventos de zoom
 function ZoomHandler({ onZoomChange }) {
   const map = useMap();
+
   useEffect(() => {
-    const h = () => onZoomChange(map.getZoom());
-    map.on('zoomend', h);
+    const handleZoom = () => onZoomChange(map.getZoom());
+    map.on('zoomend', handleZoom);
     onZoomChange(map.getZoom());
-    return () => map.off('zoomend', h);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
   }, [map, onZoomChange]);
+
   return null;
 }
 
-// Estilo básico para caminería (si tenías utils externas, podés reemplazar estos helpers)
-function getRoadStyle(_feature, zoom) {
-  return {
-    color: '#334155',
-    weight: Math.max(1, (zoom - 8) * 0.8),
-    opacity: 0.8,
-  };
-}
-function onEachRoadFeature(f, layer) {
-  const name = f?.properties?.nombre || f?.properties?.name;
-  if (name) layer.bindPopup(`<b>${name}</b>`);
-}
-
-export default function MapComponent({
-  zoneStates: zoneStatesProp = {},      // opcional: estados que vengan de App
-  onZoneStatesLoad,                     // callback(map)
-  onZonesLoad,                          // callback(array)
-  alerts: alertsProp,                   // marcadores externos opcionales
+function MapComponent({
+  zoneStates,
+  onZoneStatesLoad,
+  onZoneStateChange,
+  onZonesLoad,
+  userLocation,
+  // ALERTAS opcionales a pintar en el mapa: [{ id, lat, lng, titulo, descripcion }]
+  alerts = [],
 }) {
-  // ===== Estado interno =====
-  const [loadingMsg, setLoadingMsg] = useState('Cargando mapa…');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [zoom, setZoom] = useState(9);
-
-  const [polygonsData, setPolygonsData] = useState(null); // GeoJSON
-  const [roadsData, setRoadsData] = useState(null);       // GeoJSON
-
+  const [geoData, setGeoData] = useState(null);
+  const [meloAreaGeoData, setMeloAreaGeoData] = useState(null);
+  const [caminosData, setCaminosData] = useState(null);
   const [zones, setZones] = useState([]);
-  const [zoneStatesInternal, setZoneStatesInternal] = useState({});
-  const displayStates = useMemo(
-    () => ({ ...zoneStatesInternal, ...zoneStatesProp }),
-    [zoneStatesInternal, zoneStatesProp]
-  );
-
-  const [userLoc, setUserLoc] = useState(null);
-  const [alertPoints, setAlertPoints] = useState([]);
-
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [currentZoom, setCurrentZoom] = useState(8);
   const mapRef = useRef(null);
 
-  // ===== BACKEND_URL coherente con App.jsx =====
+  // BACKEND_URL coherente con App.jsx (window/env) y sin barra final
   const BACKEND_URL = useMemo(() => {
-    const fromWin = typeof window !== 'undefined' && window.BACKEND_URL ? String(window.BACKEND_URL) : '';
+    const fromWin = (typeof window !== 'undefined' && window.BACKEND_URL) ? String(window.BACKEND_URL) : '';
     const envs =
       (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
       (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       '';
-    return (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
+    const base = (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
+    return base;
   }, []);
 
-  // ===== Fetch helpers =====
-  // Nuestros .topojson son “simples”: contienen un FeatureCollection en topo.objects[<clave>]
-  const fetchTopoSimple = useCallback(async (url) => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const topo = await res.json();
-    const objects = topo?.objects || {};
-    const firstKey = Object.keys(objects)[0];
-    const first = objects[firstKey];
-    if (first?.type === 'FeatureCollection' && Array.isArray(first.features)) return first;
-    if (first?.type === 'Feature') return { type: 'FeatureCollection', features: [first] };
-    if (topo?.type === 'FeatureCollection') return topo; // por si vino GeoJSON plano
-    throw new Error('TopoJSON inesperado');
-  }, []);
+  const mapCenter = [-32.35, -54.20];
+  const handleZoomChange = (newZoom) => setCurrentZoom(newZoom);
 
-  const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 2, baseDelay = 400, timeoutMs = 8000 } = {}) => {
+  // Helper: fetch JSON con timeout y backoff
+  const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 3, baseDelay = 500, timeoutMs = 8000 } = {}) => {
     for (let i = 0; i <= retries; i++) {
       try {
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), timeoutMs);
-        const res = await fetch(url, { credentials: 'include', cache: 'no-store', mode: 'cors', signal: ctrl.signal, ...opts });
-        clearTimeout(t);
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        const res = await fetch(url, {
+          credentials: 'include',
+          cache: 'no-store',
+          mode: 'cors',
+          signal: ctrl.signal,
+          ...opts,
+        });
+        clearTimeout(timer);
+
         const ct = res.headers.get('content-type') || '';
         if (!res.ok) throw new Error('HTTP ' + res.status);
         if (!ct.includes('application/json')) throw new Error('No-JSON');
+
         return await res.json();
       } catch (e) {
         if (i === retries) throw e;
-        await new Promise(r => setTimeout(r, baseDelay * 2 ** i));
+        await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
       }
     }
   }, []);
 
-  // ===== FASE 1: Polígonos + estados =====
   useEffect(() => {
-    let alive = true;
-    (async () => {
+    const loadData = async () => {
       try {
-        setLoadingMsg('Cargando polígonos…');
-        const polyGeo = await fetchTopoSimple(POLY_URL);
-        if (!alive) return;
-        setPolygonsData(polyGeo);
+        setLoading(true);
 
-        // Zonas
-        const allZones = [];
-        polyGeo.features.forEach((f) => {
-          if (f.properties?.municipio) allZones.push(f.properties.municipio);
-          else if (f.properties?.serie) allZones.push(`Melo (${f.properties.serie})`);
-        });
-        setZones(allZones);
-        onZonesLoad && onZonesLoad(allZones);
+        const [municipalitiesResponse, meloResponse, caminosResponse] = await Promise.all([
+          fetch(municipalitiesDataUrl),
+          fetch(meloAreaSeriesDataUrl),
+          fetch(caminosDataUrl),
+        ]);
 
-        // Estados
-        setLoadingMsg('Cargando estados…');
-        const data = await fetchJsonRetry(`${BACKEND_URL}/api/admin/zones/states`);
-        if (!alive) return;
-        const map = {};
-        if (data?.states && typeof data.states === 'object') {
-          for (const zone in data.states) {
-            const v = data.states[zone];
-            const raw = typeof v === 'string' ? v : (v && v.state);
-            map[zone] = String(raw || '').toLowerCase();
-          }
-        } else if (data && typeof data === 'object') {
-          for (const k of Object.keys(data)) map[k] = String(data[k] || '').toLowerCase();
-        }
-        setZoneStatesInternal(map);
-        onZoneStatesLoad && onZoneStatesLoad(map);
+        if (municipalitiesResponse.ok && meloResponse.ok && caminosResponse.ok) {
+          const [municipalitiesData, meloData, caminosDataJson] = await Promise.all([
+            municipalitiesResponse.json(),
+            meloResponse.json(),
+            caminosResponse.json(),
+          ]);
 
-        setLoadingMsg('');
-      } catch (err) {
-        if (!alive) return;
-        console.error(err);
-        setErrorMsg('No se pudo cargar el mapa inicial.');
-        setLoadingMsg('');
-      }
-    })();
-    return () => { alive = false; };
-  }, [BACKEND_URL, fetchJsonRetry, fetchTopoSimple, onZonesLoad, onZoneStatesLoad]);
+          setGeoData(municipalitiesData);
+          setMeloAreaGeoData(meloData);
+          setCaminosData(caminosDataJson);
 
-  // ===== FASE 2: Caminería (diferida por zoom/idle) =====
-  useEffect(() => {
-    if (roadsData) return;
-
-    const tryLoad = () => {
-      if (roadsData) return;
-      const z = mapRef.current?.getZoom?.() ?? zoom;
-      if (z >= 10) {
-        fetchTopoSimple(CAMINOS_URL).then(setRoadsData).catch(() => {});
-      } else {
-        rIC(() => { if (!roadsData) fetchTopoSimple(CAMINOS_URL).then(setRoadsData).catch(() => {}); }, 1200);
-      }
-    };
-
-    tryLoad();
-    const h = () => tryLoad();
-    mapRef.current?.on?.('zoomend', h);
-    return () => mapRef.current?.off?.('zoomend', h);
-  }, [roadsData, zoom, fetchTopoSimple]);
-
-  // ===== FASE 3: Geolocalización (diferida) =====
-  useEffect(() => {
-    if (userLoc) return;
-    const id = rIC(() => {
-      if (!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => {},
-        { enableHighAccuracy: false, maximumAge: 30000, timeout: 3000 }
-      );
-    }, 800);
-    return () => (supportsIdle ? window.cancelIdleCallback?.(id) : clearTimeout(id));
-  }, [userLoc]);
-
-  // ===== FASE 4: Alertas (INUMET) si no vienen por props =====
-  useEffect(() => {
-    if (alertsProp && Array.isArray(alertsProp)) {
-      setAlertPoints(alertsProp);
-      return;
-    }
-    let alive = true;
-    const id = rIC(async () => {
-      try {
-        const data = await fetchJsonRetry(`${BACKEND_URL}/api/inumet/alerts/cerro-largo`);
-        if (!alive) return;
-        const pts = [];
-        if (Array.isArray(data?.features)) {
-          data.features.forEach((f, idx) => {
-            const c = f.geometry?.coordinates;
-            if (Array.isArray(c) && c.length >= 2) {
-              pts.push({
-                id: f.id || idx,
-                lat: c[1],
-                lng: c[0],
-                titulo: f.properties?.headline || 'Alerta',
-                descripcion: f.properties?.description || '',
-              });
-            }
+          // Extraer nombres de zonas
+          const allZones = [];
+          municipalitiesData.features.forEach((f) => {
+            const zoneName = f.properties.municipio;
+            allZones.push(zoneName);
           });
-        }
-        setAlertPoints(pts);
-      } catch {}
-    }, 1200);
-    return () => { alive = false; supportsIdle ? window.cancelIdleCallback?.(id) : clearTimeout(id); };
-  }, [alertsProp, BACKEND_URL, fetchJsonRetry]);
 
-  // ===== Escuchar cambios desde Admin =====
-  useEffect(() => {
-    const h = async () => {
-      try {
-        const data = await fetchJsonRetry(`${BACKEND_URL}/api/admin/zones/states`);
-        const map = {};
-        if (data?.states && typeof data.states === 'object') {
-          for (const zone in data.states) {
-            const v = data.states[zone];
-            const raw = typeof v === 'string' ? v : (v && v.state);
-            map[zone] = String(raw || '').toLowerCase();
-          }
-        } else if (data && typeof data === 'object') {
-          for (const k of Object.keys(data)) map[k] = String(data[k] || '').toLowerCase();
+          // Agregar zonas del área de Melo
+          meloData.features.forEach((f) => {
+            const zoneName = `Melo (${f.properties.serie})`;
+            allZones.push(zoneName);
+          });
+
+          setZones(allZones);
+          onZonesLoad && onZonesLoad(allZones);
+
+          // Cargar estados de zonas desde backend
+          await loadZoneStates();
+        } else {
+          throw new Error('GeoJSON assets no disponibles');
         }
-        setZoneStatesInternal(map);
-        onZoneStatesLoad && onZoneStatesLoad(map);
-      } catch {}
+      } catch (error) {
+        console.error('Error cargando datos del mapa:', error);
+        setMessage({ type: 'error', text: 'Error al cargar datos del mapa' });
+      } finally {
+        setLoading(false);
+      }
     };
-    window.addEventListener('zoneStateUpdated', h);
-    return () => window.removeEventListener('zoneStateUpdated', h);
+
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadZoneStates = useCallback(async () => {
+    try {
+      const data = await fetchJsonRetry(`${BACKEND_URL}/api/admin/zones/states`);
+      const stateMap = {};
+      if (data && typeof data === 'object') {
+        if (data.states && typeof data.states === 'object') {
+          // { states: { "AREVALO": { state:"green" }, ... } }
+          for (const zoneName in data.states) {
+            const v = data.states[zoneName];
+            const raw = typeof v === 'string' ? v : (v && v.state);
+            stateMap[zoneName] = String(raw || '').toLowerCase();
+          }
+        } else {
+          // { "AREVALO": "green", ... }
+          for (const k of Object.keys(data)) {
+            stateMap[k] = String(data[k] || '').toLowerCase();
+          }
+        }
+      }
+      onZoneStatesLoad && onZoneStatesLoad(stateMap);
+    } catch (error) {
+      console.error('Error loading zone states:', error);
+      setMessage({ type: 'error', text: 'Error al cargar estados de zonas' });
+    }
   }, [BACKEND_URL, fetchJsonRetry, onZoneStatesLoad]);
 
-  // ===== Estilo y popups =====
-  const stateLabel = (s) => (s === 'yellow' ? 'Alerta' : s === 'red' ? 'Suspendido' : 'Habilitado');
-  const styleFeature = (feature) => {
-    let name;
-    if (feature.properties?.municipio) name = feature.properties.municipio;
-    else if (feature.properties?.serie) name = `Melo (${feature.properties.serie})`;
-    const st = displayStates[name] || 'green';
-    const color = stateColors[st] || stateColors.green;
-    return { fillColor: color, color, weight: 2, opacity: 0.9, fillOpacity: 0.6 };
+  // refrescar cuando AdminPanel emite cambio
+  useEffect(() => {
+    const handler = () => loadZoneStates();
+    window.addEventListener('zoneStateUpdated', handler);
+    return () => window.removeEventListener('zoneStateUpdated', handler);
+  }, [loadZoneStates]);
+
+  const getFeatureStyle = (feature) => {
+    let zoneName;
+    if (feature.properties.municipio) {
+      zoneName = feature.properties.municipio;
+    } else if (feature.properties.serie) {
+      zoneName = `Melo (${feature.properties.serie})`;
+    }
+
+    const stateColor = zoneStates[zoneName] || 'green';
+    const finalColor = stateColors[stateColor] || stateColors.green;
+
+    return {
+      fillColor: finalColor,
+      weight: 2,
+      opacity: 0.9,
+      color: finalColor,
+      dashArray: '',
+      fillOpacity: 0.6,
+    };
   };
+
+  const getStateLabel = (state) => {
+    switch (state) {
+      case 'green':
+        return 'Habilitado';
+      case 'yellow':
+        return 'Alerta';
+      case 'red':
+        return 'Suspendido';
+      default:
+        return 'Desconocido';
+    }
+  };
+
   const onEachFeature = (feature, layer) => {
-    let name;
-    if (feature.properties?.municipio) name = feature.properties.municipio;
-    else if (feature.properties?.serie) name = `Melo (${feature.properties.serie})`;
-    const st = stateLabel(displayStates[name] || 'green');
-    layer.bindPopup(`<b>${name}</b><br/>Estado: ${st}`);
+    let name, department, area, zoneName;
+
+    if (feature.properties.municipio) {
+      name = feature.properties.municipio;
+      zoneName = name;
+      department = feature.properties.depto;
+      area = feature.properties.area_km2 ? feature.properties.area_km2.toFixed(2) : 'N/A';
+    } else if (feature.properties.serie) {
+      name = `Melo (${feature.properties.serie})`;
+      zoneName = name;
+      department = feature.properties.depto;
+      area = feature.properties.area_km2 ? feature.properties.area_km2.toFixed(2) : 'N/A';
+    }
+
+    layer.bindPopup(
+      `<b>${name}</b><br>` +
+        `Departamento: ${department}<br>` +
+        `Área: ${area} km²<br>` +
+        `Estado: ${zoneStates[zoneName] ? getStateLabel(zoneStates[zoneName]) : 'Desconocido'}`
+    );
+
     layer.on({
-      mouseover: (e) => e.target.setStyle({ fillOpacity: 0.9 }),
-      mouseout: (e) => e.target.setStyle({ fillOpacity: 0.6 }),
+      mouseover: (e) => {
+        e.target.setStyle({ fillOpacity: 0.9 });
+      },
+      mouseout: (e) => {
+        e.target.setStyle({ fillOpacity: 0.6 });
+      },
+      click: () => {
+        // Sin acción de click: el estado se maneja desde AdminPanel/App
+      },
     });
   };
 
-  // key que fuerza remount cuando cambian estados → re-estila colores
-  const polysKey = useMemo(
-    () => `polys-${Object.keys(displayStates).sort().map(k => `${k}:${displayStates[k]}`).join('|')}`,
-    [displayStates]
-  );
-
   return (
     <div className="relative w-full h-screen">
-      {loadingMsg && (
-        <div className="absolute top-4 left-4 z-[1000] p-3 rounded-lg bg-white border border-gray-300 shadow">
-          {loadingMsg}
-        </div>
-      )}
-      {errorMsg && (
-        <div className="absolute top-4 left-4 z-[1000] p-3 rounded-lg bg-red-100 text-red-800 border border-red-300 shadow">
-          {errorMsg}
+      {/* Mensajes de estado */}
+      {message.text && (
+        <div
+          className={`absolute top-4 left-4 z-[1000] p-3 rounded-lg ${
+            message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}
+        >
+          {message.text}
+          <button onClick={() => setMessage({ type: '', text: '' })} className="ml-2 text-sm">✕</button>
         </div>
       )}
 
       <MapContainer
-        whenCreated={(m) => (mapRef.current = m)}
-        center={[-32.35, -54.2]}
+        center={mapCenter}
         zoom={9}
-        style={{ width: '100%', height: '100vh' }}
-        preferCanvas
+        className="leaflet-container"
+        style={{ width: '100%', height: '100%' }}
+        whenCreated={(m) => (mapRef.current = m)}
       >
         <TileLayer
-          attribution="&copy; OpenStreetMap"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* FASE 1: polígonos + colores */}
-        {polygonsData && (
+        {geoData && geoData.features.length > 0 && (
           <GeoJSON
-            key={polysKey}
-            data={polygonsData}
-            style={styleFeature}
+            data={geoData}
+            style={getFeatureStyle}
             onEachFeature={onEachFeature}
+            key={`municipalities-${JSON.stringify(zoneStates)}`}
           />
         )}
 
-        {/* FASE 2: caminería (diferida) */}
-        {roadsData && (
+        {meloAreaGeoData && meloAreaGeoData.features.length > 0 && (
           <GeoJSON
-            data={roadsData}
-            style={(f) => getRoadStyle(f, zoom)}
+            data={meloAreaGeoData}
+            style={getFeatureStyle}
+            onEachFeature={onEachFeature}
+            key={`melo-${JSON.stringify(zoneStates)}`}
+          />
+        )}
+
+        {caminosData && caminosData.features.length > 0 && (
+          <GeoJSON
+            data={caminosData}
+            style={(f) => getRoadStyle(f, currentZoom)}
             onEachFeature={onEachRoadFeature}
+            key={`caminos-layer-zoom-${currentZoom}`}
             pathOptions={{ interactive: true, bubblingMouseEvents: false }}
           />
         )}
 
-        {/* FASE 3: geolocalización */}
-        {userLoc && (
-          <Marker position={[userLoc.lat, userLoc.lng]} icon={gpsIcon}>
-            <Popup>Tu ubicación</Popup>
-          </Marker>
-        )}
-
-        {/* FASE 4: alertas */}
-        {alertPoints.map((a) => (
-          <Marker key={`alert-${a.id}`} position={[a.lat, a.lng]} icon={attentionIcon}>
+        {/* Marcador de la ubicación del usuario */}
+        {userLocation && (
+          <Marker position={[userLocation.lat, userLocation.lng]} icon={gpsIcon}>
             <Popup>
-              <div style={{ minWidth: 180 }}>
-                <strong>{a.titulo || 'Alerta'}</strong><br />
-                <small>{a.descripcion || ''}</small>
+              <div className="text-center">
+                <strong>Tu ubicación actual</strong>
+                <br />
+                <small>
+                  Lat: {userLocation.lat.toFixed(6)}
+                  <br />
+                  Lng: {userLocation.lng.toFixed(6)}
+                </small>
               </div>
             </Popup>
           </Marker>
-        ))}
+        )}
 
-        <ZoomHandler onZoomChange={setZoom} />
+        {/* Marcadores de ALERTA */}
+        {Array.isArray(alerts) &&
+          alerts.map((a) =>
+            a && a.lat != null && a.lng != null ? (
+              <Marker key={`alert-${a.id}`} position={[a.lat, a.lng]} icon={attentionIcon}>
+                <Popup>
+                  <div style={{ minWidth: 180 }}>
+                    <strong>{a.titulo || 'Reporte'}</strong>
+                    <br />
+                    <small>{a.descripcion || ''}</small>
+                  </div>
+                </Popup>
+              </Marker>
+            ) : null
+          )}
+
+        <ZoomHandler onZoomChange={setCurrentZoom} />
       </MapContainer>
     </div>
   );
 }
+
+export default MapComponent;
