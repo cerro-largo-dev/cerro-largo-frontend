@@ -27,7 +27,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
   const [locationError, setLocationError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Geolocalización SOLO al abrir el panel
+  // Geolocalización SOLO al abrir el panel (si aún no tenemos lat/lng)
   useEffect(() => {
     if (open) {
       if (!formData.latitude || !formData.longitude) {
@@ -35,7 +35,6 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
         getLocation();
       }
     }
-    // no reintentar por cada render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -54,7 +53,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }));
-        onLocationChange && onLocationChange({ lat, lng });
+        onLocationChange && onLocationChange({ lat, lng }); // se refleja en el mapa y queda aunque cierres
         setIsLoadingLocation(false);
       },
       () => {
@@ -62,7 +61,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
         const fallbackLat = -32.3667;
         const fallbackLng = -54.1667;
         setFormData((prev) => ({ ...prev, latitude: fallbackLat, longitude: fallbackLng }));
-        onLocationChange && onLocationChange({ lat: fallbackLat, lng: fallbackLng });
+        onLocationChange && onLocationChange({ lat: fallbackLat, lng: fallbackLng }); // también persiste
         setLocationError("Usando ubicación aproximada de Cerro Largo (GPS no disponible)");
         setIsLoadingLocation(false);
       },
@@ -119,7 +118,6 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
         throw new Error(errTxt || `HTTP ${resp.status}`);
       }
 
-      // éxito
       alert("Reporte enviado exitosamente");
       handleClose();
     } catch (err) {
@@ -130,10 +128,16 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
   };
 
   const handleClose = () => {
-    // limpiar estado y notificar al mapa
-    setFormData({ description: "", placeName: "", latitude: null, longitude: null, photos: [] });
+    // Limpia solo campos del formulario; CONSERVA lat/lng para que el mapa siga mostrando la ubicación
+    setFormData((prev) => ({
+      description: "",
+      placeName: "",
+      latitude: prev.latitude,   // ← se mantiene
+      longitude: prev.longitude, // ← se mantiene
+      photos: [],
+    }));
     setLocationError("");
-    onLocationChange && onLocationChange(null);
+    // ❌ NO llamar onLocationChange(null) → el marcador permanece en el mapa
     onClose && onClose();
   };
 
@@ -317,7 +321,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
                 disabled={isSubmitting}
               >
-                Cancelar
+                Cerrar
               </button>
               <button
                 type="submit"
@@ -339,6 +343,10 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
       </div>
     </div>
   );
+};
+
+export default ReportModal;
+
 };
 
 export default ReportModal;
