@@ -38,11 +38,11 @@ const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
     <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
-      <g>
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-              fill="#000000"/>
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-              fill="#F59E0B" transform="scale(0.9) translate(1.3,1.3)"/>
+      <defs>
+        <filter id="shadow"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/></filter>
+      </defs>
+      <g filter="url(#shadow)">
+        <path d="M12 2 L22 20 H2 Z" fill="#fbbf24" stroke="#111827" stroke-width="1.5"/>
         <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
         <circle cx="12" cy="16.5" r="1.2" fill="#111827"/>
       </g>
@@ -59,6 +59,10 @@ const stateColors = {
   yellow: '#eab308',
   red: '#ef4444',
 };
+
+// Colores placeholder mientras se cargan estados
+const LOADING_FILL = '#e5e7eb'; // gris claro
+const LOADING_STROKE = '#9ca3af'; // gris medio
 
 // Manejar eventos de zoom
 function ZoomHandler({ onZoomChange }) {
@@ -93,6 +97,12 @@ function MapComponent({
   const [message, setMessage] = useState({ type: '', text: '' });
   const [currentZoom, setCurrentZoom] = useState(8);
   const mapRef = useRef(null);
+
+  // ¿Ya tenemos estados desde el backend?
+  const statesLoaded = useMemo(
+    () => zoneStates && Object.keys(zoneStates).length > 0,
+    [zoneStates]
+  );
 
   // BACKEND_URL coherente con App.jsx (window/env) y sin barra final
   const BACKEND_URL = useMemo(() => {
@@ -140,10 +150,13 @@ function MapComponent({
       try {
         setLoading(true);
 
+        // Carga de estados en paralelo a los GeoJSON
+        const statesP = loadZoneStates();
+
         const [municipalitiesResponse, meloResponse, caminosResponse] = await Promise.all([
-          fetch(municipalitiesDataUrl),
-          fetch(meloAreaSeriesDataUrl),
-          fetch(caminosDataUrl),
+          fetch(municipalitiesDataUrl, { cache: 'no-store' }),
+          fetch(meloAreaSeriesDataUrl, { cache: 'no-store' }),
+          fetch(caminosDataUrl, { cache: 'no-store' }),
         ]);
 
         if (municipalitiesResponse.ok && meloResponse.ok && caminosResponse.ok) {
@@ -173,8 +186,8 @@ function MapComponent({
           setZones(allZones);
           onZonesLoad && onZonesLoad(allZones);
 
-          // Cargar estados de zonas desde backend
-          await loadZoneStates();
+          // Esperar a que terminen los estados si aún no finalizaron
+          await statesP;
         } else {
           throw new Error('GeoJSON assets no disponibles');
         }
@@ -216,7 +229,7 @@ function MapComponent({
     }
   }, [BACKEND_URL, fetchJsonRetry, onZoneStatesLoad]);
 
-  // refrescar cuando AdminPanel emite cambio
+  // Listener externo para actualizar estados (disparado desde AdminPanel)
   useEffect(() => {
     const handler = () => loadZoneStates();
     window.addEventListener('zoneStateUpdated', handler);
@@ -231,7 +244,19 @@ function MapComponent({
       zoneName = `Melo (${feature.properties.serie})`;
     }
 
-    const stateColor = zoneStates[zoneName] || 'green';
+    // Placeholder neutral mientras no llegan los estados
+    if (!statesLoaded) {
+      return {
+        fillColor: LOADING_FILL,
+        weight: 1.5,
+        opacity: 0.8,
+        color: LOADING_STROKE,
+        dashArray: '',
+        fillOpacity: 0.25,
+      };
+    }
+
+    const stateColor = zoneStates[zoneName];
     const finalColor = stateColors[stateColor] || stateColors.green;
 
     return {
@@ -249,16 +274,19 @@ function MapComponent({
       case 'green':
         return 'Habilitado';
       case 'yellow':
-        return 'Alerta';
+        return 'Precaución';
       case 'red':
-        return 'Suspendido';
+        return 'Cerrado';
       default:
         return 'Desconocido';
     }
   };
 
   const onEachFeature = (feature, layer) => {
-    let name, department, area, zoneName;
+    let name = 'Zona';
+    let zoneName = '';
+    let department = 'Cerro Largo';
+    let area = 'N/A';
 
     if (feature.properties.municipio) {
       name = feature.properties.municipio;
@@ -293,12 +321,12 @@ function MapComponent({
   };
 
   return (
-    <div className="relative w-full h-screen">
-      {/* Mensajes de estado */}
+    <div className="w-full h-full">
+      {/* Mensajes */}
       {message.text && (
         <div
-          className={`absolute top-4 left-4 z-[1000] p-3 rounded-lg ${
-            message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          className={`absolute z-[1001] left-1/2 -translate-x-1/2 top-4 px-3 py-2 rounded shadow text-white ${
+            message.type === 'error' ? 'bg-red-600' : 'bg-green-600'
           }`}
         >
           {message.text}
@@ -332,7 +360,7 @@ function MapComponent({
             data={meloAreaGeoData}
             style={getFeatureStyle}
             onEachFeature={onEachFeature}
-            key={`melo-${JSON.stringify(zoneStates)}`}
+            key={`melo-area-${JSON.stringify(zoneStates)}`}
           />
         )}
 
@@ -367,10 +395,10 @@ function MapComponent({
         {Array.isArray(alerts) &&
           alerts.map((a) =>
             a && a.lat != null && a.lng != null ? (
-              <Marker key={`alert-${a.id}`} position={[a.lat, a.lng]} icon={attentionIcon}>
+              <Marker key={a.id || `${a.lat}-${a.lng}`} position={[a.lat, a.lng]} icon={attentionIcon}>
                 <Popup>
-                  <div style={{ minWidth: 180 }}>
-                    <strong>{a.titulo || 'Reporte'}</strong>
+                  <div className="text-sm">
+                    <strong>{a.titulo || 'Atención'}</strong>
                     <br />
                     <small>{a.descripcion || ''}</small>
                   </div>
