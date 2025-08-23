@@ -24,13 +24,21 @@
       .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     </style>
 
-    <!-- App.css NO bloqueante (Vite lo reescribe al asset final) -->
+    <!-- TU CSS (no bloqueante). Asegurate de NO tener @import "tailwindcss" adentro -->
     <link rel="stylesheet" href="/src/App.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="/src/App.css"></noscript>
 
-    <!-- Leaflet.css NO bloqueante (archivo LOCAL, ver paso 4) -->
-    <link rel="stylesheet" href="/vendor/leaflet.css" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="/vendor/leaflet.css"></noscript>
+    <!-- Leaflet CSS desde CDN (MIME correcto) -->
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""
+          media="print" onload="this.media='all'">
+    <noscript>
+      <link rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+            integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    </noscript>
 
     <!-- Preconnect/DNS para tiles OSM -->
     <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org">
