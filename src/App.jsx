@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import "./App.css";
 
 import MapComponent from "./components/MapComponent";
 import AdminPanel from "./components/AdminPanel";
