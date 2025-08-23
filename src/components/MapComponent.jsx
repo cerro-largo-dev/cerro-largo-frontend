@@ -7,15 +7,15 @@ import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
 import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
 import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
-// Iconos por defecto Leaflet (vía CDN para evitar paths rotos)
+// Configurar iconos de Leaflet (por defecto)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Ícono GPS (SVG embebido)
+// Ícono GPS (SVG)
 const gpsIcon = new L.Icon({
   iconUrl:
     'data:image/svg+xml;base64,' +
@@ -33,12 +33,14 @@ const gpsIcon = new L.Icon({
   className: 'gps-marker-icon',
 });
 
-// Ícono de atención
+// Ícono de ATENCIÓN estilo Waze (triángulo amarillo con signo)
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
     <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
-      <defs><filter id="shadow"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/></filter></defs>
+      <defs>
+        <filter id="shadow"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/></filter>
+      </defs>
       <g filter="url(#shadow)">
         <path d="M12 2 L22 20 H2 Z" fill="#fbbf24" stroke="#111827" stroke-width="1.5"/>
         <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
@@ -51,21 +53,30 @@ const attentionIcon = L.divIcon({
   popupAnchor: [0, -26],
 });
 
-// Colores de estado
-const stateColors = { green: '#22c55e', yellow: '#eab308', red: '#ef4444' };
-// Placeholder mientras llegan estados
-const LOADING_FILL = '#e5e7eb';
-const LOADING_STROKE = '#9ca3af';
+// Colores para estados
+const stateColors = {
+  green: '#22c55e',
+  yellow: '#eab308',
+  red: '#ef4444',
+};
 
-// Handler de zoom
+// Colores placeholder mientras se cargan estados
+const LOADING_FILL = '#e5e7eb'; // gris claro
+const LOADING_STROKE = '#9ca3af'; // gris medio
+
+// Manejar eventos de zoom
 function ZoomHandler({ onZoomChange }) {
   const map = useMap();
+
   useEffect(() => {
     const handleZoom = () => onZoomChange(map.getZoom());
     map.on('zoomend', handleZoom);
     onZoomChange(map.getZoom());
-    return () => map.off('zoomend', handleZoom);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
   }, [map, onZoomChange]);
+
   return null;
 }
 
@@ -74,45 +85,58 @@ function MapComponent({
   onZoneStatesLoad,
   onZoneStateChange,
   onZonesLoad,
-  userLocation,     // ← viene desde App cuando se abre el ReportModal
-  alerts = [],      // [{ id, lat, lng, titulo, descripcion }]
+  userLocation,
+  // ALERTAS opcionales a pintar en el mapa: [{ id, lat, lng, titulo, descripcion }]
+  alerts = [],
 }) {
   const [geoData, setGeoData] = useState(null);
   const [meloAreaGeoData, setMeloAreaGeoData] = useState(null);
   const [caminosData, setCaminosData] = useState(null);
   const [zones, setZones] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [currentZoom, setCurrentZoom] = useState(9);
+  const [currentZoom, setCurrentZoom] = useState(8);
   const mapRef = useRef(null);
 
+  // ¿Ya tenemos estados desde el backend?
   const statesLoaded = useMemo(
     () => zoneStates && Object.keys(zoneStates).length > 0,
     [zoneStates]
   );
 
+  // BACKEND_URL coherente con App.jsx (window/env) y sin barra final
   const BACKEND_URL = useMemo(() => {
     const fromWin = (typeof window !== 'undefined' && window.BACKEND_URL) ? String(window.BACKEND_URL) : '';
     const envs =
       (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
       (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       '';
-    return (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
+    const base = (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
+    return base;
   }, []);
 
   const mapCenter = [-32.35, -54.20];
-  const handleZoomChange = (z) => setCurrentZoom(z);
+  const handleZoomChange = (newZoom) => setCurrentZoom(newZoom);
 
-  // fetch JSON con retry
+  // Helper: fetch JSON con timeout y backoff
   const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 3, baseDelay = 500, timeoutMs = 8000 } = {}) => {
     for (let i = 0; i <= retries; i++) {
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-        const res = await fetch(url, { credentials: 'include', cache: 'no-store', mode: 'cors', signal: ctrl.signal, ...opts });
+        const res = await fetch(url, {
+          credentials: 'include',
+          cache: 'no-store',
+          mode: 'cors',
+          signal: ctrl.signal,
+          ...opts,
+        });
         clearTimeout(timer);
+
         const ct = res.headers.get('content-type') || '';
         if (!res.ok) throw new Error('HTTP ' + res.status);
         if (!ct.includes('application/json')) throw new Error('No-JSON');
+
         return await res.json();
       } catch (e) {
         if (i === retries) throw e;
@@ -121,10 +145,12 @@ function MapComponent({
     }
   }, []);
 
-  // Carga A+C: estados en paralelo y placeholder gris hasta que lleguen
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
+
+        // Carga de estados en paralelo a los GeoJSON
         const statesP = loadZoneStates();
 
         const [municipalitiesResponse, meloResponse, caminosResponse] = await Promise.all([
@@ -133,33 +159,46 @@ function MapComponent({
           fetch(caminosDataUrl, { cache: 'no-store' }),
         ]);
 
-        if (!(municipalitiesResponse.ok && meloResponse.ok && caminosResponse.ok)) {
+        if (municipalitiesResponse.ok && meloResponse.ok && caminosResponse.ok) {
+          const [municipalitiesData, meloData, caminosDataJson] = await Promise.all([
+            municipalitiesResponse.json(),
+            meloResponse.json(),
+            caminosResponse.json(),
+          ]);
+
+          setGeoData(municipalitiesData);
+          setMeloAreaGeoData(meloData);
+          setCaminosData(caminosDataJson);
+
+          // Extraer nombres de zonas
+          const allZones = [];
+          municipalitiesData.features.forEach((f) => {
+            const zoneName = f.properties.municipio;
+            allZones.push(zoneName);
+          });
+
+          // Agregar zonas del área de Melo
+          meloData.features.forEach((f) => {
+            const zoneName = `Melo (${f.properties.serie})`;
+            allZones.push(zoneName);
+          });
+
+          setZones(allZones);
+          onZonesLoad && onZonesLoad(allZones);
+
+          // Esperar a que terminen los estados si aún no finalizaron
+          await statesP;
+        } else {
           throw new Error('GeoJSON assets no disponibles');
         }
-
-        const [municipalitiesData, meloData, caminosDataJson] = await Promise.all([
-          municipalitiesResponse.json(),
-          meloResponse.json(),
-          caminosResponse.json(),
-        ]);
-
-        setGeoData(municipalitiesData);
-        setMeloAreaGeoData(meloData);
-        setCaminosData(caminosDataJson);
-
-        // Zonas
-        const allZones = [];
-        municipalitiesData.features.forEach((f) => allZones.push(f.properties.municipio));
-        meloData.features.forEach((f) => allZones.push(`Melo (${f.properties.serie})`));
-        setZones(allZones);
-        onZonesLoad && onZonesLoad(allZones);
-
-        await statesP;
       } catch (error) {
         console.error('Error cargando datos del mapa:', error);
         setMessage({ type: 'error', text: 'Error al cargar datos del mapa' });
+      } finally {
+        setLoading(false);
       }
     };
+
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -170,13 +209,17 @@ function MapComponent({
       const stateMap = {};
       if (data && typeof data === 'object') {
         if (data.states && typeof data.states === 'object') {
+          // { states: { "AREVALO": { state:"green" }, ... } }
           for (const zoneName in data.states) {
             const v = data.states[zoneName];
             const raw = typeof v === 'string' ? v : (v && v.state);
             stateMap[zoneName] = String(raw || '').toLowerCase();
           }
         } else {
-          for (const k of Object.keys(data)) stateMap[k] = String(data[k] || '').toLowerCase();
+          // { "AREVALO": "green", ... }
+          for (const k of Object.keys(data)) {
+            stateMap[k] = String(data[k] || '').toLowerCase();
+          }
         }
       }
       onZoneStatesLoad && onZoneStatesLoad(stateMap);
@@ -186,7 +229,7 @@ function MapComponent({
     }
   }, [BACKEND_URL, fetchJsonRetry, onZoneStatesLoad]);
 
-  // refresco externo
+  // Listener externo para actualizar estados (disparado desde AdminPanel)
   useEffect(() => {
     const handler = () => loadZoneStates();
     window.addEventListener('zoneStateUpdated', handler);
@@ -195,9 +238,13 @@ function MapComponent({
 
   const getFeatureStyle = (feature) => {
     let zoneName;
-    if (feature.properties.municipio) zoneName = feature.properties.municipio;
-    else if (feature.properties.serie) zoneName = `Melo (${feature.properties.serie})`;
+    if (feature.properties.municipio) {
+      zoneName = feature.properties.municipio;
+    } else if (feature.properties.serie) {
+      zoneName = `Melo (${feature.properties.serie})`;
+    }
 
+    // Placeholder neutral mientras no llegan los estados
     if (!statesLoaded) {
       return {
         fillColor: LOADING_FILL,
@@ -211,6 +258,7 @@ function MapComponent({
 
     const stateColor = zoneStates[zoneName];
     const finalColor = stateColors[stateColor] || stateColors.green;
+
     return {
       fillColor: finalColor,
       weight: 2,
@@ -221,32 +269,54 @@ function MapComponent({
     };
   };
 
-  const getStateLabel = (state) =>
-    state === 'green' ? 'Habilitado' : state === 'yellow' ? 'Precaución' : state === 'red' ? 'Cerrado' : 'Desconocido';
+  const getStateLabel = (state) => {
+    switch (state) {
+      case 'green':
+        return 'Habilitado';
+      case 'yellow':
+        return 'Precaución';
+      case 'red':
+        return 'Cerrado';
+      default:
+        return 'Desconocido';
+    }
+  };
 
   const onEachFeature = (feature, layer) => {
-    let name = 'Zona', zoneName = '', department = 'Cerro Largo', area = 'N/A';
+    let name = 'Zona';
+    let zoneName = '';
+    let department = 'Cerro Largo';
+    let area = 'N/A';
+
     if (feature.properties.municipio) {
-      name = feature.properties.municipio; zoneName = name;
+      name = feature.properties.municipio;
+      zoneName = name;
       department = feature.properties.depto;
       area = feature.properties.area_km2 ? feature.properties.area_km2.toFixed(2) : 'N/A';
     } else if (feature.properties.serie) {
-      name = `Melo (${feature.properties.serie})`; zoneName = name;
+      name = `Melo (${feature.properties.serie})`;
+      zoneName = name;
       department = feature.properties.depto;
       area = feature.properties.area_km2 ? feature.properties.area_km2.toFixed(2) : 'N/A';
     }
 
     layer.bindPopup(
       `<b>${name}</b><br>` +
-      `Departamento: ${department}<br>` +
-      `Área: ${area} km²<br>` +
-      `Estado: ${zoneStates[zoneName] ? getStateLabel(zoneStates[zoneName]) : 'Desconocido'}`
+        `Departamento: ${department}<br>` +
+        `Área: ${area} km²<br>` +
+        `Estado: ${zoneStates[zoneName] ? getStateLabel(zoneStates[zoneName]) : 'Desconocido'}`
     );
 
     layer.on({
-      mouseover: (e) => e.target.setStyle({ fillOpacity: 0.9 }),
-      mouseout:  (e) => e.target.setStyle({ fillOpacity: 0.6 }),
-      click:     () => {},
+      mouseover: (e) => {
+        e.target.setStyle({ fillOpacity: 0.9 });
+      },
+      mouseout: (e) => {
+        e.target.setStyle({ fillOpacity: 0.6 });
+      },
+      click: () => {
+        // Sin acción de click: el estado se maneja desde AdminPanel/App
+      },
     });
   };
 
@@ -304,7 +374,7 @@ function MapComponent({
           />
         )}
 
-        {/* Marcador de ubicación del usuario (solo si App la pasa) */}
+        {/* Marcador de la ubicación del usuario */}
         {userLocation && (
           <Marker position={[userLocation.lat, userLocation.lng]} icon={gpsIcon}>
             <Popup>
@@ -337,11 +407,12 @@ function MapComponent({
             ) : null
           )}
 
-        <ZoomHandler onZoomChange={handleZoomChange} />
+        <ZoomHandler onZoomChange={setCurrentZoom} />
       </MapContainer>
     </div>
   );
 }
 
 export default MapComponent;
+
 
