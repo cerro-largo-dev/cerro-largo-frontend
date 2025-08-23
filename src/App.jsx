@@ -43,14 +43,52 @@ function useBackendUrl() {
 
 // ---------------------------- Home Page (Mapa) ----------------------------
 function HomePage() {
-  const BACKEND_URL = useBackendUrl();
+  useBackendUrl();
 
-  // Estado global de la vista
+  // Estado global
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
-  const [userLocation, setUserLocation] = useState(null); // ← se setea SOLO al abrir ReportModal
+  const [userLocation, setUserLocation] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [alerts, setAlerts] = useState([]);
+
+  // Geolocalización en vivo
+  const geoWatchIdRef = useRef(null);
+  const [geoError, setGeoError] = useState("");
+
+  const startLiveLocation = useCallback(() => {
+    if (!("geolocation" in navigator)) {
+      setGeoError("La geolocalización no está soportada en este navegador");
+      setUserLocation({ lat: -32.3667, lng: -54.1667 });
+      return;
+    }
+    if (geoWatchIdRef.current != null) return; // ya mirando
+
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        setGeoError("");
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        setGeoError("No se pudo obtener GPS; usando ubicación aproximada de Cerro Largo.");
+        setUserLocation({ lat: -32.3667, lng: -54.1667 });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+    geoWatchIdRef.current = id;
+  }, []);
+
+  // Limpieza solo al cerrar/recargar la página
+  useEffect(() => {
+    const cleanup = () => {
+      if (geoWatchIdRef.current != null) {
+        try { navigator.geolocation.clearWatch(geoWatchIdRef.current); } catch {}
+        geoWatchIdRef.current = null;
+      }
+    };
+    window.addEventListener("beforeunload", cleanup);
+    return () => window.removeEventListener("beforeunload", cleanup);
+  }, []);
 
   // Paneles / Modales
   const [reportOpen, setReportOpen] = useState(false);
@@ -72,20 +110,14 @@ function HomePage() {
     const text = await res.text();
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
     if (!ct.includes("application/json")) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
-    try {
-      return JSON.parse(text);
-    } catch {
-      return {};
-    }
+    try { return JSON.parse(text); } catch { return {}; }
   }, []);
-
-  // ❌ Geolocalización al cargar: eliminada (se pide en ReportModal al abrir)
 
   // Cargar estados de zonas
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
-      const data = await fetchJson(`${BACKEND_URL}/api/admin/zones/states`);
+      const data = await fetchJson(`${window.BACKEND_URL}/api/admin/zones/states`);
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
@@ -98,7 +130,7 @@ function HomePage() {
     } finally {
       setRefreshing(false);
     }
-  }, [BACKEND_URL, fetchJson]);
+  }, [fetchJson]);
 
   const handleZoneStateChange = (zoneName, newStateEn) => {
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
@@ -110,15 +142,11 @@ function HomePage() {
   const handleZonesLoad = (loadedZones) => {
     if (Array.isArray(loadedZones)) setZones(loadedZones);
   };
-  const handleUserLocationChange = (loc) => {
-    // lo llamará ReportModal al abrir/cerrar (con coords o null)
-    setUserLocation(loc);
-  };
 
-  // Cargar alertas visibles
+  // Alertas visibles
   const loadAlerts = useCallback(async () => {
     try {
-      const json = await fetchJson(`${BACKEND_URL}/api/reportes/visibles`);
+      const json = await fetchJson(`${window.BACKEND_URL}/api/reportes/visibles`);
       if (json?.ok && Array.isArray(json.reportes)) {
         setAlerts(
           json.reportes
@@ -132,14 +160,12 @@ function HomePage() {
             }))
         );
       }
-    } catch {
-      // silencioso
-    }
-  }, [BACKEND_URL, fetchJson]);
+    } catch {}
+  }, [fetchJson]);
 
   useEffect(() => {
     loadAlerts();
-    const t = setInterval(loadAlerts, 30000); // refrescar cada 30s
+    const t = setInterval(loadAlerts, 30000);
     return () => clearInterval(t);
   }, [loadAlerts]);
 
@@ -160,10 +186,8 @@ function HomePage() {
 
   return (
     <main id="main" role="main" tabIndex={-1} className="relative w-full h-screen" style={{ minHeight: "100vh" }}>
-      {/* Encabezado accesible (no visible) */}
       <h1 className="sr-only">Caminos que conectan – Gobierno de Cerro Largo</h1>
 
-      {/* Barra superior */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
           onClick={handleRefreshZoneStates}
@@ -184,7 +208,6 @@ function HomePage() {
         </button>
       </div>
 
-      {/* Mapa */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
@@ -195,33 +218,27 @@ function HomePage() {
         alerts={alerts}
       />
 
-      {/* FABs inferior-izquierda */}
       <div
         className="fixed z-[1000] flex flex-col items-start gap-2"
-        style={{
-          bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))",
-          left: "max(1rem, env(safe-area-inset-left, 1rem))",
-        }}
+        style={{ bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))", left: "max(1rem, env(safe-area-inset-left, 1rem))" }}
       >
         <InfoButton ref={infoBtnRef} onClick={() => setInfoOpen((v) => !v)} isOpen={infoOpen} />
-        <ReportButton
-          ref={reportFabRef}
-          onClick={handleToggleReportModal}
-          onLocationChange={handleUserLocationChange}
-        />
+        <ReportButton ref={reportFabRef} onClick={handleToggleReportModal} />
       </div>
 
-      {/* Paneles y modales */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
       <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={() => setInfoOpen(false)} buttonRef={infoBtnRef} />
+
       <ReportModal
         open={reportModalOpen}
         anchorRect={reportModalAnchorRect}
         onClose={closeReportModal}
-        onLocationChange={handleUserLocationChange}
+        /** geolocalización en vivo */
+        userLocation={userLocation}
+        startLiveLocation={startLiveLocation}
+        geoError={geoError}
       />
 
-      {/* <AlertWidget /> */}
       <SiteBanner />
     </main>
   );
@@ -260,4 +277,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
