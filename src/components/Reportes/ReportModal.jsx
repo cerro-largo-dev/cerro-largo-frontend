@@ -1,5 +1,5 @@
 // src/components/Reportes/ReportModal.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 function getBackendUrl() {
   const fromWin =
@@ -26,6 +26,29 @@ const ReportModal = ({ open, onClose, anchorRect, userLocation, startLiveLocatio
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Ancho base adaptable; en móviles lo calculamos para que SIEMPRE quepa a un lado del FAB
+  const baseMin = 260; // mínimo aceptable
+  const baseMax = 380; // máximo visual
+  const modalWidth = useMemo(() => {
+    const pad = 12;
+    const vw = typeof window !== "undefined" ? window.innerWidth : 390;
+    // si no hay anchor aún, elige algo razonable
+    if (!anchorRect) return Math.min(Math.max(baseMin, 320), vw - pad * 2);
+
+    const rightAvail = vw - anchorRect.right - pad * 2;
+    const leftAvail = anchorRect.left - pad * 2;
+
+    // intentar derecha
+    if (rightAvail >= baseMin) return Math.min(Math.max(baseMin, Math.min(baseMax, rightAvail)), vw - pad * 2);
+
+    // intentar izquierda
+    if (leftAvail >= baseMin) return Math.min(Math.max(baseMin, Math.min(baseMax, leftAvail)), vw - pad * 2);
+
+    // si ni derecha ni izquierda tienen >= baseMin, achicar hasta lo que se pueda (pero siempre LATERAL)
+    const lateralAvail = Math.max(rightAvail, leftAvail);
+    return Math.max(180, Math.min(lateralAvail, baseMax)); // último recurso: lateral estrecho
+  }, [anchorRect]);
+
   // Al abrir: si no tenemos coords aún, dispara watchPosition desde App
   useEffect(() => {
     if (open && !userLocation) {
@@ -34,15 +57,11 @@ const ReportModal = ({ open, onClose, anchorRect, userLocation, startLiveLocatio
     }
   }, [open, userLocation, startLiveLocation]);
 
-  // Cuando llega ubicación desde App, reflejarla en el formulario y detener "cargando"
+  // Cuando llega ubicación desde App, reflejarla y detener "cargando"
   useEffect(() => {
     if (userLocation) {
       setIsLoadingLocation(false);
-      setFormData((prev) => ({
-        ...prev,
-        latitude: userLocation.lat,
-        longitude: userLocation.lng,
-      }));
+      setFormData((prev) => ({ ...prev, latitude: userLocation.lat, longitude: userLocation.lng }));
     }
   }, [userLocation]);
 
@@ -124,26 +143,61 @@ const ReportModal = ({ open, onClose, anchorRect, userLocation, startLiveLocatio
 
   if (!open) return null;
 
-  // Posicionamiento relativo
+  // ---- POSICIONAMIENTO LATERAL FORZADO (derecha o izquierda del FAB) ----
   const getModalPosition = () => {
-    const base = { position: "fixed", bottom: "1rem", left: "5.25rem", zIndex: 1000 };
-    if (!anchorRect) return base;
-    const modalWidth = 384, pad = 16;
-    let leftPos = anchorRect.right + pad;
-    if (leftPos + modalWidth > window.innerWidth) {
-      leftPos = Math.max(pad, anchorRect.left - modalWidth - pad);
+    const pad = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // fallback si no hay anchorRect
+    if (!anchorRect) {
+      return {
+        position: "fixed",
+        left: `${pad}px`,
+        bottom: `${pad}px`,
+        zIndex: 1000,
+        width: `${modalWidth}px`,
+        transform: "translateZ(0)",
+      };
     }
-    const bottom = Math.max(pad, window.innerHeight - anchorRect.bottom);
-    return { position: "fixed", left: `${leftPos}px`, bottom: `${bottom}px`, zIndex: 1000 };
+
+    const rightAvail = vw - anchorRect.right - pad; // px a la derecha del botón
+    const leftAvail = anchorRect.left - pad;        // px a la izquierda del botón
+
+    // ¿Cabe a la derecha?
+    const fitsRight = rightAvail >= modalWidth;
+    // ¿Cabe a la izquierda?
+    const fitsLeft = leftAvail >= modalWidth;
+
+    let left;
+    if (fitsRight || rightAvail >= leftAvail) {
+      // preferir derecha; si no cabe “perfecto”, igual lo ponemos a la derecha y el ancho ya fue ajustado
+      left = Math.max(pad, anchorRect.right + pad);
+    } else {
+      // izquierda
+      left = Math.max(pad, anchorRect.left - modalWidth - pad);
+    }
+
+    // alineado vertical a la base del botón, sin taparlo
+    const bottom = Math.max(pad, vh - anchorRect.bottom);
+
+    return {
+      position: "fixed",
+      left: `${left}px`,
+      bottom: `${bottom}px`,
+      zIndex: 1000,
+      width: `${modalWidth}px`,
+      transform: "translateZ(0)",
+    };
   };
 
   const modalStyle = getModalPosition();
 
   return (
     <div className="p-4" style={modalStyle}>
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg border">
+      <div className="w-full bg-white rounded-lg shadow-lg border max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex flex-row items-center justify-between space-y-0 pb-4 p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b">
           <h3 className="text-lg font-semibold">Reportar Estado</h3>
           <button
             onClick={handleClose}
@@ -229,14 +283,26 @@ const ReportModal = ({ open, onClose, anchorRect, userLocation, startLiveLocatio
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                  />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 Fotos (máximo 3)
               </label>
 
               <div className="flex items-center gap-2">
-                <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" id="photo-upload" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  id="photo-upload"
+                />
                 <button
                   type="button"
                   onClick={() => document.getElementById("photo-upload").click()}
@@ -255,7 +321,11 @@ const ReportModal = ({ open, onClose, anchorRect, userLocation, startLiveLocatio
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   {formData.photos.map((photo, idx) => (
                     <div key={idx} className="relative">
-                      <img src={URL.createObjectURL(photo)} alt={`Foto ${idx + 1}`} className="w-full h-20 object-cover rounded border" />
+                      <img
+                        src={URL.createObjectURL(photo)}
+                        alt={`Foto ${idx + 1}`}
+                        className="w-full h-20 object-cover rounded border"
+                      />
                       <button
                         type="button"
                         onClick={() => removePhoto(idx)}
