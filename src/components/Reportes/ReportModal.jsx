@@ -15,7 +15,7 @@ function getBackendUrl() {
   return (fromWin || envVal || "https://cerro-largo-backend.onrender.com").replace(/\/$/, "");
 }
 
-const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
+const ReportModal = ({ open, onClose, anchorRect, userLocation, startLiveLocation, geoError }) => {
   const [formData, setFormData] = useState({
     description: "",
     placeName: "",
@@ -24,49 +24,31 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
     photos: [],
   });
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [locationError, setLocationError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Geolocalización SOLO al abrir el panel (si aún no tenemos lat/lng)
+  // Al abrir: si no tenemos coords aún, dispara watchPosition desde App
   useEffect(() => {
-    if (open) {
-      if (!formData.latitude || !formData.longitude) {
-        setLocationError("");
-        getLocation();
-      }
+    if (open && !userLocation) {
+      setIsLoadingLocation(true);
+      startLiveLocation && startLiveLocation();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, userLocation, startLiveLocation]);
 
-  const getLocation = () => {
-    setIsLoadingLocation(true);
-    setLocationError("");
-
-    if (!navigator.geolocation) {
-      setLocationError("La geolocalización no está soportada en este navegador");
+  // Cuando llega ubicación desde App, reflejarla en el formulario y detener "cargando"
+  useEffect(() => {
+    if (userLocation) {
       setIsLoadingLocation(false);
-      return;
+      setFormData((prev) => ({
+        ...prev,
+        latitude: userLocation.lat,
+        longitude: userLocation.lng,
+      }));
     }
+  }, [userLocation]);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }));
-        onLocationChange && onLocationChange({ lat, lng }); // se refleja en el mapa y queda aunque cierres
-        setIsLoadingLocation(false);
-      },
-      () => {
-        // Fallback: Cerro Largo
-        const fallbackLat = -32.3667;
-        const fallbackLng = -54.1667;
-        setFormData((prev) => ({ ...prev, latitude: fallbackLat, longitude: fallbackLng }));
-        onLocationChange && onLocationChange({ lat: fallbackLat, lng: fallbackLng }); // también persiste
-        setLocationError("Usando ubicación aproximada de Cerro Largo (GPS no disponible)");
-        setIsLoadingLocation(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+  const handleRetry = () => {
+    setIsLoadingLocation(true);
+    startLiveLocation && startLiveLocation();
   };
 
   const handleInputChange = (e) => {
@@ -128,28 +110,25 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
   };
 
   const handleClose = () => {
-    // Limpia solo campos del formulario; CONSERVA lat/lng para que el mapa siga mostrando la ubicación
+    // Conserva lat/lng (seguimiento sigue activo en App)
+    setIsLoadingLocation(false);
     setFormData((prev) => ({
       description: "",
       placeName: "",
-      latitude: prev.latitude,   // ← se mantiene
-      longitude: prev.longitude, // ← se mantiene
+      latitude: prev.latitude,
+      longitude: prev.longitude,
       photos: [],
     }));
-    setLocationError("");
-    // ❌ NO llamar onLocationChange(null) → el marcador permanece en el mapa
     onClose && onClose();
   };
 
   if (!open) return null;
 
-  // Posicionamiento relativo al botón flotante (anchorRect)
+  // Posicionamiento relativo
   const getModalPosition = () => {
     const base = { position: "fixed", bottom: "1rem", left: "5.25rem", zIndex: 1000 };
     if (!anchorRect) return base;
-
-    const modalWidth = 384; // ~24rem
-    const pad = 16;
+    const modalWidth = 384, pad = 16;
     let leftPos = anchorRect.right + pad;
     if (leftPos + modalWidth > window.innerWidth) {
       leftPos = Math.max(pad, anchorRect.left - modalWidth - pad);
@@ -190,34 +169,33 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
                 </svg>
                 Ubicación
               </label>
-              {isLoadingLocation ? (
+
+              {isLoadingLocation && !userLocation ? (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                   Obteniendo ubicación...
                 </div>
-              ) : locationError ? (
+              ) : geoError && !userLocation ? (
                 <div className="text-sm text-red-600">
-                  {locationError}
+                  {geoError}
                   <button
                     type="button"
-                    onClick={getLocation}
+                    onClick={handleRetry}
                     className="p-0 h-auto ml-2 text-blue-600 underline bg-transparent border-none cursor-pointer"
                   >
                     Reintentar
                   </button>
                 </div>
-              ) : formData.latitude && formData.longitude ? (
+              ) : userLocation ? (
                 <div className="text-sm text-green-600">
-                  ✓ Ubicación: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                  ✓ Ubicación: {userLocation.lat.toFixed(6)}, {userLocation.lng.toFixed(6)}
                 </div>
               ) : null}
             </div>
 
             {/* Nombre del lugar */}
             <div className="space-y-2">
-              <label htmlFor="placeName" className="text-sm font-medium">
-                Nombre del lugar
-              </label>
+              <label htmlFor="placeName" className="text-sm font-medium">Nombre del lugar</label>
               <input
                 id="placeName"
                 name="placeName"
@@ -230,9 +208,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
 
             {/* Descripción */}
             <div className="space-y-2">
-              <label htmlFor="description" className="text-sm font-medium">
-                Descripción
-              </label>
+              <label htmlFor="description" className="text-sm font-medium">Descripción</label>
               <textarea
                 id="description"
                 name="description"
@@ -253,26 +229,14 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 Fotos (máximo 3)
               </label>
 
               <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                  id="photo-upload"
-                />
+                <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" id="photo-upload" />
                 <button
                   type="button"
                   onClick={() => document.getElementById("photo-upload").click()}
@@ -291,11 +255,7 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   {formData.photos.map((photo, idx) => (
                     <div key={idx} className="relative">
-                      <img
-                        src={URL.createObjectURL(photo)}
-                        alt={`Foto ${idx + 1}`}
-                        className="w-full h-20 object-cover rounded border"
-                      />
+                      <img src={URL.createObjectURL(photo)} alt={`Foto ${idx + 1}`} className="w-full h-20 object-cover rounded border" />
                       <button
                         type="button"
                         onClick={() => removePhoto(idx)}
