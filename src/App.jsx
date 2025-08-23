@@ -14,7 +14,7 @@ import SiteBanner from "./components/SiteBanner";
 // import AlertWidget from "./components/AlertWidget"; // 👉 Desactivado por ahora (ver instrucciones abajo)
 import ReportsPanel from "./components/ReportsPanel";
 
-import "./App.css";
+// ❌ No importes "./App.css"; se carga desde index.html sin bloquear
 
 // ---------------------------- Util: BACKEND_URL ----------------------------
 function useBackendUrl() {
@@ -182,7 +182,16 @@ function HomePage() {
   const closeReportModal = () => setReportModalOpen(false);
 
   return (
-    <div className="relative w-full h-screen">
+    <main
+      id="main"
+      role="main"
+      tabIndex={-1}
+      className="relative w-full h-screen"
+      style={{ minHeight: "100vh" }}
+    >
+      {/* Encabezado accesible (no visible) para lectores de pantalla */}
+      <h1 className="sr-only">Caminos que conectan – Gobierno de Cerro Largo</h1>
+
       {/* Botones barra superior */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
@@ -233,7 +242,12 @@ function HomePage() {
 
       {/* Paneles y modales */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
-      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={closeInfoPanel} buttonRef={infoBtnRef} />
+      <InfoPanel
+        open={infoOpen}
+        anchorRect={infoAnchorRect}
+        onClose={closeInfoPanel}
+        buttonRef={infoBtnRef}
+      />
       <ReportModal
         open={reportModalOpen}
         anchorRect={reportModalAnchorRect}
@@ -267,7 +281,7 @@ function HomePage() {
       {/* <AlertWidget /> */}
 
       <SiteBanner />
-    </div>
+    </main>
   );
 }
 
@@ -306,3 +320,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
