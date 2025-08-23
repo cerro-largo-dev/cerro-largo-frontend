@@ -13,55 +13,31 @@
     <meta property="og:locale" content="es_UY" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 
-    <!-- CSS crítico (asegura layout y accesibilidad básica) -->
+    <!-- CSS crítico mínimo -->
     <style>
       html, body, #root { height: 100%; margin: 0; padding: 0; }
-      /* Contenedor de la app */
       #root > div.app-root { min-height: 100vh; position: relative; width: 100%; }
-      /* Leaflet full-viewport desde el primer paint */
       .leaflet-container { width: 100%; height: 100%; }
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
 
-      /* Skip link: completamente oculto salvo al foco (no debe “asomar”) */
-      .skip-link {
-        position: absolute;
-        left: -10000px;
-        top: auto;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(1px, 1px, 1px, 1px);
-        clip-path: inset(50%);
-        white-space: nowrap;
-        border: 0;
-        padding: 0;
-        margin: 0;
-      }
-      .skip-link:focus {
-        left: 8px;
-        top: 8px;
-        width: auto;
-        height: auto;
-        clip: auto;
-        clip-path: none;
-        padding: 8px 12px;
-        background: #fff;
-        color: #000;
-        text-decoration: none;
-        box-shadow: 0 0 0 2px #000;
-        z-index: 10000;
-      }
-
-      /* Visually hidden (para el h1 accesible si se usa) */
-      .sr-only {
-        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-      }
+      /* Skip link: oculto salvo al foco */
+      .skip-link{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);clip-path:inset(50%);white-space:nowrap;border:0;padding:0;margin:0}
+      .skip-link:focus{left:8px;top:8px;width:auto;height:auto;clip:auto;clip-path:none;padding:8px 12px;background:#fff;color:#000;box-shadow:0 0 0 2px #000;z-index:10000}
+      .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     </style>
 
-    <!-- CSS global NO bloqueante (Vite reescribe /src/App.css al asset final) -->
-    <link rel="preload" as="style" href="/src/App.css" onload="this.onload=null;this.rel='stylesheet'">
+    <!-- App.css NO bloqueante -->
+    <link rel="stylesheet" href="/src/App.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="/src/App.css"></noscript>
+
+    <!-- Leaflet.css NO bloqueante (elige una opción) -->
+    <!-- Opción local (recomendada): copia node_modules/leaflet/dist/leaflet.css a /public/vendor/leaflet.css -->
+    <link rel="stylesheet" href="/vendor/leaflet.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="/vendor/leaflet.css"></noscript>
+    <!-- Opción CDN (alternativa):
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></noscript>
+    -->
 
     <!-- Preconnect/DNS para tiles OSM -->
     <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org">
@@ -72,13 +48,9 @@
     <link rel="preconnect" href="https://c.tile.openstreetmap.org" crossorigin>
   </head>
   <body>
-    <!-- Enlace de omisión (aparece solo al foco con TAB) -->
     <a class="skip-link" href="#main">Saltar al contenido principal</a>
-
     <noscript>Esta aplicación requiere JavaScript habilitado.</noscript>
     <div id="root"></div>
-
-    <!-- Entrada Vite/React -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
