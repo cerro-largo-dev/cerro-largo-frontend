@@ -346,8 +346,3 @@ const ReportModal = ({ open, onClose, onLocationChange, anchorRect }) => {
 };
 
 export default ReportModal;
-
-};
-
-export default ReportModal;
-
