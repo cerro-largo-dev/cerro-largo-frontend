@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Componentes
 import MapComponent from "./components/MapComponent";
 import AdminPanel from "./components/AdminPanel";
 import ReportButton from "./components/Reportes/ReportButton";
@@ -11,10 +10,8 @@ import ReportHubPanel from "./components/ReportHubPanel";
 import InfoButton from "./components/InfoButton";
 import InfoPanel from "./components/InfoPanel";
 import SiteBanner from "./components/SiteBanner";
-// import AlertWidget from "./components/AlertWidget"; // 👉 Desactivado por ahora (ver instrucciones abajo)
+// import AlertWidget from "./components/AlertWidget"; // desactivado hasta tener APIs
 import ReportsPanel from "./components/ReportsPanel";
-
-// ❌ No importes "./App.css"; se carga desde index.html sin bloquear
 
 // ---------------------------- Util: BACKEND_URL ----------------------------
 function useBackendUrl() {
@@ -48,13 +45,11 @@ function useBackendUrl() {
 function HomePage() {
   const BACKEND_URL = useBackendUrl();
 
-  // Estados del mapa/paneles
+  // Estado global de la vista
   const [zoneStates, setZoneStates] = useState({});
   const [zones, setZones] = useState([]);
-  const [userLocation, setUserLocation] = useState(null);
+  const [userLocation, setUserLocation] = useState(null); // ← se setea SOLO al abrir ReportModal
   const [refreshing, setRefreshing] = useState(false);
-
-  // Alertas visibles (del backend) → se pintan en el mapa
   const [alerts, setAlerts] = useState([]);
 
   // Paneles / Modales
@@ -84,19 +79,7 @@ function HomePage() {
     }
   }, []);
 
-  // Geolocalización (fallback: Melo)
-  useEffect(() => {
-    const FALLBACK = { lat: -32.3667, lng: -54.1667 };
-    if (!navigator.geolocation) {
-      setUserLocation(FALLBACK);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setUserLocation(FALLBACK),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
-    );
-  }, []);
+  // ❌ Geolocalización al cargar: eliminada (se pide en ReportModal al abrir)
 
   // Cargar estados de zonas
   const handleRefreshZoneStates = useCallback(async () => {
@@ -128,7 +111,8 @@ function HomePage() {
     if (Array.isArray(loadedZones)) setZones(loadedZones);
   };
   const handleUserLocationChange = (loc) => {
-    if (loc) setUserLocation(loc);
+    // lo llamará ReportModal al abrir/cerrar (con coords o null)
+    setUserLocation(loc);
   };
 
   // Cargar alertas visibles
@@ -167,13 +151,6 @@ function HomePage() {
   };
   const closeReportPanel = () => setReportOpen(false);
 
-  const toggleInfo = () => {
-    const btn = infoBtnRef.current;
-    if (btn) setInfoAnchorRect(btn.getBoundingClientRect());
-    setInfoOpen((v) => !v);
-  };
-  const closeInfoPanel = () => setInfoOpen(false);
-
   const handleToggleReportModal = () => {
     const btn = reportFabRef.current;
     if (btn) setReportModalAnchorRect(btn.getBoundingClientRect());
@@ -182,17 +159,11 @@ function HomePage() {
   const closeReportModal = () => setReportModalOpen(false);
 
   return (
-    <main
-      id="main"
-      role="main"
-      tabIndex={-1}
-      className="relative w-full h-screen"
-      style={{ minHeight: "100vh" }}
-    >
-      {/* Encabezado accesible (no visible) para lectores de pantalla */}
+    <main id="main" role="main" tabIndex={-1} className="relative w-full h-screen" style={{ minHeight: "100vh" }}>
+      {/* Encabezado accesible (no visible) */}
       <h1 className="sr-only">Caminos que conectan – Gobierno de Cerro Largo</h1>
 
-      {/* Botones barra superior */}
+      {/* Barra superior */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
           onClick={handleRefreshZoneStates}
@@ -221,7 +192,7 @@ function HomePage() {
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
-        alerts={alerts} // marcadores de atención
+        alerts={alerts}
       />
 
       {/* FABs inferior-izquierda */}
@@ -232,7 +203,7 @@ function HomePage() {
           left: "max(1rem, env(safe-area-inset-left, 1rem))",
         }}
       >
-        <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
+        <InfoButton ref={infoBtnRef} onClick={() => setInfoOpen((v) => !v)} isOpen={infoOpen} />
         <ReportButton
           ref={reportFabRef}
           onClick={handleToggleReportModal}
@@ -242,12 +213,7 @@ function HomePage() {
 
       {/* Paneles y modales */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
-      <InfoPanel
-        open={infoOpen}
-        anchorRect={infoAnchorRect}
-        onClose={closeInfoPanel}
-        buttonRef={infoBtnRef}
-      />
+      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={() => setInfoOpen(false)} buttonRef={infoBtnRef} />
       <ReportModal
         open={reportModalOpen}
         anchorRect={reportModalAnchorRect}
@@ -255,31 +221,7 @@ function HomePage() {
         onLocationChange={handleUserLocationChange}
       />
 
-      {/* Alertas (desactivado hasta tener APIs)
-         -------------------------------------------------------------------
-         Para reactivar este widget:
-         1) Restaurar el import arriba:
-              import AlertWidget from "./components/AlertWidget";
-         2) Renderizar aquí abajo UNA de estas opciones:
-
-            A) Directo:
-               <AlertWidget />
-
-            B) Con bandera por entorno (recomendado):
-               {import.meta.env.VITE_ENABLE_ALERTS === '1' && <AlertWidget />}
-
-            C) Carga diferida (evita incluirlo en el bundle si está off):
-               const LazyAlertWidget = React.lazy(() => import("./components/AlertWidget"));
-               {import.meta.env.VITE_ENABLE_ALERTS === '1' && (
-                 <React.Suspense fallback={null}>
-                   <LazyAlertWidget />
-                 </React.Suspense>
-               )}
-
-            Recuerda definir VITE_ENABLE_ALERTS=1 en tu .env cuando lo habilites.
-         ------------------------------------------------------------------- */}
       {/* <AlertWidget /> */}
-
       <SiteBanner />
     </main>
   );
@@ -287,9 +229,9 @@ function HomePage() {
 
 // ---------------------------- App con Router ----------------------------
 export default function App() {
-  useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
+  useBackendUrl(); // publica BACKEND_URL en window
 
-  // REGISTRO SW (una vez)
+  // Registrar SW
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       const onLoad = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -302,7 +244,6 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
-
         <Route
           path="/admin"
           element={
@@ -313,12 +254,10 @@ export default function App() {
             />
           }
         />
-
         <Route path="/admin/reportes" element={<ReportsPanel />} />
         <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
   );
 }
-
 
