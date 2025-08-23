@@ -54,7 +54,7 @@ function HomePage() {
   const [userLocation, setUserLocation] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // NUEVO: alertas visibles (del backend) → se pintan en el mapa
+  // Alertas visibles (del backend) → se pintan en el mapa
   const [alerts, setAlerts] = useState([]);
 
   // Paneles / Modales
@@ -70,7 +70,7 @@ function HomePage() {
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
   const reportFabRef = useRef(null);
 
-  // Helpers
+  // Helper fetch JSON
   const fetchJson = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { credentials: "include", ...options });
     const ct = res.headers.get("content-type") || "";
@@ -131,7 +131,7 @@ function HomePage() {
     if (loc) setUserLocation(loc);
   };
 
-  // Cargar alertas visibles (NUEVO)
+  // Cargar alertas visibles
   const loadAlerts = useCallback(async () => {
     try {
       const json = await fetchJson(`${BACKEND_URL}/api/reportes/visibles`);
@@ -148,7 +148,7 @@ function HomePage() {
             }))
         );
       }
-    } catch (e) {
+    } catch {
       // silencioso
     }
   }, [BACKEND_URL, fetchJson]);
@@ -212,7 +212,7 @@ function HomePage() {
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
-        alerts={alerts}   // <--- NUEVO: marcadores de atención
+        alerts={alerts} // marcadores de atención
       />
 
       {/* FABs inferior-izquierda */}
@@ -251,24 +251,15 @@ function HomePage() {
 // ---------------------------- App con Router ----------------------------
 export default function App() {
   useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
-export default function App() {
-  useBackendUrl(); // publica BACKEND_URL en window por si otros lo usan
 
   // REGISTRO SW (una vez)
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      const onLoad = () => navigator.serviceWorker.register('/sw.js').catch(() => {});
-      window.addEventListener('load', onLoad);
-      return () => window.removeEventListener('load', onLoad);
+    if ("serviceWorker" in navigator) {
+      const onLoad = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+      window.addEventListener("load", onLoad);
+      return () => window.removeEventListener("load", onLoad);
     }
   }, []);
-
-  return (
-    <BrowserRouter>
-      {/* ... tus rutas ... */}
-    </BrowserRouter>
-  );
-}
 
   return (
     <BrowserRouter>
@@ -287,7 +278,6 @@ export default function App() {
         />
 
         <Route path="/admin/reportes" element={<ReportsPanel />} />
-
         <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
