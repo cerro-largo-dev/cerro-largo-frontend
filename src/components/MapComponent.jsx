@@ -37,12 +37,12 @@ const gpsIcon = new L.Icon({
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
-   svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
-      <g>
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-              fill="#000000"/>
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-              fill="#F59E0B" transform="scale(0.9) translate(1.3,1.3)"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
+      <defs>
+        <filter id="shadow"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/></filter>
+      </defs>
+      <g filter="url(#shadow)">
+        <path d="M12 2 L22 20 H2 Z" fill="#fbbf24" stroke="#111827" stroke-width="1.5"/>
         <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
         <circle cx="12" cy="16.5" r="1.2" fill="#111827"/>
       </g>
