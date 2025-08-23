@@ -10,7 +10,7 @@ import ReportHubPanel from "./components/ReportHubPanel";
 import InfoButton from "./components/InfoButton";
 import InfoPanel from "./components/InfoPanel";
 import SiteBanner from "./components/SiteBanner";
-// import AlertWidget from "./components/AlertWidget"; // desactivado hasta tener APIs
+// import AlertWidget from "./components/AlertWidget";
 import ReportsPanel from "./components/ReportsPanel";
 
 // ---------------------------- Util: BACKEND_URL ----------------------------
@@ -43,7 +43,7 @@ function useBackendUrl() {
 
 // ---------------------------- Home Page (Mapa) ----------------------------
 function HomePage() {
-  useBackendUrl();
+  useBackendUrl(); // publica BACKEND_URL en window
 
   // Estado global
   const [zoneStates, setZoneStates] = useState({});
@@ -78,7 +78,7 @@ function HomePage() {
     geoWatchIdRef.current = id;
   }, []);
 
-  // Limpieza solo al cerrar/recargar la página
+  // Limpieza solo al cerrar/recargar la página (no al cerrar el panel)
   useEffect(() => {
     const cleanup = () => {
       if (geoWatchIdRef.current != null) {
@@ -169,7 +169,7 @@ function HomePage() {
     return () => clearInterval(t);
   }, [loadAlerts]);
 
-  // UI handlers
+  // UI handlers (anclajes corregidos)
   const toggleReportPanel = () => {
     const btn = reportBtnRef.current;
     if (btn) setReportAnchorRect(btn.getBoundingClientRect());
@@ -177,9 +177,16 @@ function HomePage() {
   };
   const closeReportPanel = () => setReportOpen(false);
 
+  const toggleInfo = () => {
+    const btn = infoBtnRef.current;
+    if (btn) setInfoAnchorRect(btn.getBoundingClientRect()); // ✅ anclado al botón
+    setInfoOpen((v) => !v);
+  };
+  const closeInfoPanel = () => setInfoOpen(false);
+
   const handleToggleReportModal = () => {
     const btn = reportFabRef.current;
-    if (btn) setReportModalAnchorRect(btn.getBoundingClientRect());
+    if (btn) setReportModalAnchorRect(btn.getBoundingClientRect()); // ✅ anclado al FAB
     setReportModalOpen((prev) => !prev);
   };
   const closeReportModal = () => setReportModalOpen(false);
@@ -188,6 +195,7 @@ function HomePage() {
     <main id="main" role="main" tabIndex={-1} className="relative w-full h-screen" style={{ minHeight: "100vh" }}>
       <h1 className="sr-only">Caminos que conectan – Gobierno de Cerro Largo</h1>
 
+      {/* Barra superior */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
         <button
           onClick={handleRefreshZoneStates}
@@ -208,6 +216,7 @@ function HomePage() {
         </button>
       </div>
 
+      {/* Mapa */}
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
@@ -218,16 +227,24 @@ function HomePage() {
         alerts={alerts}
       />
 
+      {/* FABs inferior-izquierda */}
       <div
         className="fixed z-[1000] flex flex-col items-start gap-2"
         style={{ bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))", left: "max(1rem, env(safe-area-inset-left, 1rem))" }}
       >
-        <InfoButton ref={infoBtnRef} onClick={() => setInfoOpen((v) => !v)} isOpen={infoOpen} />
+        <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
         <ReportButton ref={reportFabRef} onClick={handleToggleReportModal} />
       </div>
 
+      {/* Paneles y modales (anclados a sus botones) */}
       <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
-      <InfoPanel open={infoOpen} anchorRect={infoAnchorRect} onClose={() => setInfoOpen(false)} buttonRef={infoBtnRef} />
+
+      <InfoPanel
+        open={infoOpen}
+        anchorRect={infoAnchorRect}
+        onClose={closeInfoPanel}
+        buttonRef={infoBtnRef}
+      />
 
       <ReportModal
         open={reportModalOpen}
