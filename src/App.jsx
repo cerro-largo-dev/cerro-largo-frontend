@@ -14,7 +14,9 @@ import SiteBanner from "./components/SiteBanner";
 // import AlertWidget from "./components/AlertWidget";
 import ReportsPanel from "./components/ReportsPanel";
 
-// ---------------------------- Util: BACKEND_URL ----------------------------
+// ---------------------------------------------------------------------------
+// Util: BACKEND_URL
+// ---------------------------------------------------------------------------
 function useBackendUrl() {
   useEffect(() => {
     const be =
@@ -42,7 +44,9 @@ function useBackendUrl() {
   }, []);
 }
 
-// ---------------------------- Home Page (Mapa) ----------------------------
+// ---------------------------------------------------------------------------
+// Home Page (Mapa)
+// ---------------------------------------------------------------------------
 function HomePage() {
   useBackendUrl(); // publica BACKEND_URL en window
 
@@ -83,7 +87,9 @@ function HomePage() {
   useEffect(() => {
     const cleanup = () => {
       if (geoWatchIdRef.current != null) {
-        try { navigator.geolocation.clearWatch(geoWatchIdRef.current); } catch {}
+        try {
+          navigator.geolocation.clearWatch(geoWatchIdRef.current);
+        } catch {}
         geoWatchIdRef.current = null;
       }
     };
@@ -111,7 +117,11 @@ function HomePage() {
     const text = await res.text();
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
     if (!ct.includes("application/json")) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
-    try { return JSON.parse(text); } catch { return {}; }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {};
+    }
   }, []);
 
   // Cargar estados de zonas
@@ -140,7 +150,9 @@ function HomePage() {
     if (!updatesMap || typeof updatesMap !== "object") return;
     setZoneStates((prev) => ({ ...prev, ...updatesMap }));
   };
-  const handleZonesLoad = (loadedZones) => { if (Array.isArray(loadedZones)) setZones(loadedZones); };
+  const handleZonesLoad = (loadedZones) => {
+    if (Array.isArray(loadedZones)) setZones(loadedZones);
+  };
 
   // Alertas visibles
   const loadAlerts = useCallback(async () => {
@@ -211,6 +223,9 @@ function HomePage() {
   };
   const closeReportModal = () => setReportModalOpen(false);
 
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
   return (
     <main id="main" role="main" tabIndex={-1} className="relative w-full h-screen" style={{ minHeight: "100vh" }}>
       <h1 className="sr-only">Caminos que conectan – Gobierno de Cerro Largo</h1>
@@ -265,7 +280,7 @@ function HomePage() {
         open={reportOpen}
         anchorRect={reportAnchorRect}
         onClose={closeReportPanel}
-        buttonRef={reportBtnRef}   // por si el componente lo usa
+        buttonRef={reportBtnRef}
       />
 
       <InfoPanel
@@ -290,7 +305,9 @@ function HomePage() {
   );
 }
 
-// ---------------------------- App con Router ----------------------------
+// ---------------------------------------------------------------------------
+// App con Router
+// ---------------------------------------------------------------------------
 export default function App() {
   useBackendUrl(); // publica BACKEND_URL en window
 
