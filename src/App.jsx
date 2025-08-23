@@ -11,7 +11,7 @@ import ReportHubPanel from "./components/ReportHubPanel";
 import InfoButton from "./components/InfoButton";
 import InfoPanel from "./components/InfoPanel";
 import SiteBanner from "./components/SiteBanner";
-import AlertWidget from "./components/AlertWidget";
+// import AlertWidget from "./components/AlertWidget"; // 👉 Desactivado por ahora (ver instrucciones abajo)
 import ReportsPanel from "./components/ReportsPanel";
 
 import "./App.css";
@@ -241,8 +241,31 @@ function HomePage() {
         onLocationChange={handleUserLocationChange}
       />
 
-      {/* Alertas y banner */}
-      <AlertWidget />
+      {/* Alertas (desactivado hasta tener APIs)
+         -------------------------------------------------------------------
+         Para reactivar este widget:
+         1) Restaurar el import arriba:
+              import AlertWidget from "./components/AlertWidget";
+         2) Renderizar aquí abajo UNA de estas opciones:
+
+            A) Directo:
+               <AlertWidget />
+
+            B) Con bandera por entorno (recomendado):
+               {import.meta.env.VITE_ENABLE_ALERTS === '1' && <AlertWidget />}
+
+            C) Carga diferida (evita incluirlo en el bundle si está off):
+               const LazyAlertWidget = React.lazy(() => import("./components/AlertWidget"));
+               {import.meta.env.VITE_ENABLE_ALERTS === '1' && (
+                 <React.Suspense fallback={null}>
+                   <LazyAlertWidget />
+                 </React.Suspense>
+               )}
+
+            Recuerda definir VITE_ENABLE_ALERTS=1 en tu .env cuando lo habilites.
+         ------------------------------------------------------------------- */}
+      {/* <AlertWidget /> */}
+
       <SiteBanner />
     </div>
   );
