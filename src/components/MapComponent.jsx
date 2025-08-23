@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
-import municipalitiesDataUrl from '../assets/cerro_largo_municipios_2025.geojson?url';
-import meloAreaSeriesDataUrl from '../assets/series_cerro_largo.geojson?url';
+
+// 👉 Un solo archivo combinado
+import combinedPolygonsUrl from '../assets/combined_polygons.geojson?url';
 import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
 import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
@@ -54,29 +55,21 @@ const attentionIcon = L.divIcon({
 });
 
 // Colores para estados
-const stateColors = {
-  green: '#22c55e',
-  yellow: '#eab308',
-  red: '#ef4444',
-};
+const stateColors = { green: '#22c55e', yellow: '#eab308', red: '#ef4444' };
 
-// Colores placeholder mientras se cargan estados
-const LOADING_FILL = '#e5e7eb'; // gris claro
-const LOADING_STROKE = '#9ca3af'; // gris medio
+// Placeholder mientras se cargan estados
+const LOADING_FILL = '#e5e7eb';
+const LOADING_STROKE = '#9ca3af';
 
 // Manejar eventos de zoom
 function ZoomHandler({ onZoomChange }) {
   const map = useMap();
-
   useEffect(() => {
     const handleZoom = () => onZoomChange(map.getZoom());
     map.on('zoomend', handleZoom);
     onZoomChange(map.getZoom());
-    return () => {
-      map.off('zoomend', handleZoom);
-    };
+    return () => map.off('zoomend', handleZoom);
   }, [map, onZoomChange]);
-
   return null;
 }
 
@@ -86,37 +79,32 @@ function MapComponent({
   onZoneStateChange,
   onZonesLoad,
   userLocation,
-  // ALERTAS opcionales a pintar en el mapa: [{ id, lat, lng, titulo, descripcion }]
-  alerts = [],
+  alerts = [], // [{ id, lat, lng, titulo, descripcion }]
 }) {
-  const [geoData, setGeoData] = useState(null);
-  const [meloAreaGeoData, setMeloAreaGeoData] = useState(null);
+  const [combinedGeo, setCombinedGeo] = useState(null);
   const [caminosData, setCaminosData] = useState(null);
   const [zones, setZones] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [currentZoom, setCurrentZoom] = useState(8);
+  const [currentZoom, setCurrentZoom] = useState(9);
   const mapRef = useRef(null);
 
-  // ¿Ya tenemos estados desde el backend?
   const statesLoaded = useMemo(
     () => zoneStates && Object.keys(zoneStates).length > 0,
     [zoneStates]
   );
 
-  // BACKEND_URL coherente con App.jsx (window/env) y sin barra final
+  // BACKEND_URL coherente con App.jsx
   const BACKEND_URL = useMemo(() => {
     const fromWin = (typeof window !== 'undefined' && window.BACKEND_URL) ? String(window.BACKEND_URL) : '';
     const envs =
       (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
       (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       '';
-    const base = (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
-    return base;
+    return (fromWin || envs || 'https://cerro-largo-backend.onrender.com').replace(/\/$/, '');
   }, []);
 
   const mapCenter = [-32.35, -54.20];
-  const handleZoomChange = (newZoom) => setCurrentZoom(newZoom);
+  const handleZoomChange = (z) => setCurrentZoom(z);
 
   // Helper: fetch JSON con timeout y backoff
   const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 3, baseDelay = 500, timeoutMs = 8000 } = {}) => {
@@ -124,19 +112,11 @@ function MapComponent({
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-        const res = await fetch(url, {
-          credentials: 'include',
-          cache: 'no-store',
-          mode: 'cors',
-          signal: ctrl.signal,
-          ...opts,
-        });
+        const res = await fetch(url, { credentials: 'include', cache: 'no-store', mode: 'cors', signal: ctrl.signal, ...opts });
         clearTimeout(timer);
-
         const ct = res.headers.get('content-type') || '';
         if (!res.ok) throw new Error('HTTP ' + res.status);
         if (!ct.includes('application/json')) throw new Error('No-JSON');
-
         return await res.json();
       } catch (e) {
         if (i === retries) throw e;
@@ -145,60 +125,45 @@ function MapComponent({
     }
   }, []);
 
+  // Carga: estados + GeoJSON combinado + caminería
   useEffect(() => {
     const loadData = async () => {
       try {
-        setLoading(true);
-
-        // Carga de estados en paralelo a los GeoJSON
         const statesP = loadZoneStates();
 
-        const [municipalitiesResponse, meloResponse, caminosResponse] = await Promise.all([
-          fetch(municipalitiesDataUrl, { cache: 'no-store' }),
-          fetch(meloAreaSeriesDataUrl, { cache: 'no-store' }),
+        const [combinedRes, caminosRes] = await Promise.all([
+          fetch(combinedPolygonsUrl, { cache: 'no-store' }),
           fetch(caminosDataUrl, { cache: 'no-store' }),
         ]);
 
-        if (municipalitiesResponse.ok && meloResponse.ok && caminosResponse.ok) {
-          const [municipalitiesData, meloData, caminosDataJson] = await Promise.all([
-            municipalitiesResponse.json(),
-            meloResponse.json(),
-            caminosResponse.json(),
-          ]);
+        if (!(combinedRes.ok && caminosRes.ok)) throw new Error('GeoJSON assets no disponibles');
 
-          setGeoData(municipalitiesData);
-          setMeloAreaGeoData(meloData);
-          setCaminosData(caminosDataJson);
+        const [combinedJson, caminosJson] = await Promise.all([
+          combinedRes.json(),
+          caminosRes.json(),
+        ]);
 
-          // Extraer nombres de zonas
-          const allZones = [];
-          municipalitiesData.features.forEach((f) => {
-            const zoneName = f.properties.municipio;
-            allZones.push(zoneName);
-          });
+        setCombinedGeo(combinedJson);
+        setCaminosData(caminosJson);
 
-          // Agregar zonas del área de Melo
-          meloData.features.forEach((f) => {
-            const zoneName = `Melo (${f.properties.serie})`;
-            allZones.push(zoneName);
-          });
+        // Construir listado de zonas con el esquema previo:
+        // - Municipios: properties.municipio
+        // - Series Melo: properties.serie  => "Melo (X)"
+        const allZones = [];
+        (combinedJson.features || []).forEach((f) => {
+          const p = f.properties || {};
+          if (p.municipio) allZones.push(p.municipio);
+          else if (p.serie) allZones.push(`Melo (${p.serie})`);
+        });
+        setZones(allZones);
+        onZonesLoad && onZonesLoad(allZones);
 
-          setZones(allZones);
-          onZonesLoad && onZonesLoad(allZones);
-
-          // Esperar a que terminen los estados si aún no finalizaron
-          await statesP;
-        } else {
-          throw new Error('GeoJSON assets no disponibles');
-        }
+        await statesP;
       } catch (error) {
         console.error('Error cargando datos del mapa:', error);
         setMessage({ type: 'error', text: 'Error al cargar datos del mapa' });
-      } finally {
-        setLoading(false);
       }
     };
-
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -209,17 +174,13 @@ function MapComponent({
       const stateMap = {};
       if (data && typeof data === 'object') {
         if (data.states && typeof data.states === 'object') {
-          // { states: { "AREVALO": { state:"green" }, ... } }
           for (const zoneName in data.states) {
             const v = data.states[zoneName];
             const raw = typeof v === 'string' ? v : (v && v.state);
             stateMap[zoneName] = String(raw || '').toLowerCase();
           }
         } else {
-          // { "AREVALO": "green", ... }
-          for (const k of Object.keys(data)) {
-            stateMap[k] = String(data[k] || '').toLowerCase();
-          }
+          for (const k of Object.keys(data)) stateMap[k] = String(data[k] || '').toLowerCase();
         }
       }
       onZoneStatesLoad && onZoneStatesLoad(stateMap);
@@ -229,75 +190,44 @@ function MapComponent({
     }
   }, [BACKEND_URL, fetchJsonRetry, onZoneStatesLoad]);
 
-  // Listener externo para actualizar estados (disparado desde AdminPanel)
+  // Listener para refrescar estados
   useEffect(() => {
     const handler = () => loadZoneStates();
     window.addEventListener('zoneStateUpdated', handler);
     return () => window.removeEventListener('zoneStateUpdated', handler);
   }, [loadZoneStates]);
 
+  // Estilo por estado (igual que antes)
   const getFeatureStyle = (feature) => {
+    const p = feature.properties || {};
     let zoneName;
-    if (feature.properties.municipio) {
-      zoneName = feature.properties.municipio;
-    } else if (feature.properties.serie) {
-      zoneName = `Melo (${feature.properties.serie})`;
-    }
+    if (p.municipio) zoneName = p.municipio;
+    else if (p.serie) zoneName = `Melo (${p.serie})`;
 
-    // Placeholder neutral mientras no llegan los estados
     if (!statesLoaded) {
-      return {
-        fillColor: LOADING_FILL,
-        weight: 1.5,
-        opacity: 0.8,
-        color: LOADING_STROKE,
-        dashArray: '',
-        fillOpacity: 0.25,
-      };
+      return { fillColor: LOADING_FILL, weight: 1.5, opacity: 0.8, color: LOADING_STROKE, dashArray: '', fillOpacity: 0.25 };
     }
 
     const stateColor = zoneStates[zoneName];
     const finalColor = stateColors[stateColor] || stateColors.green;
-
-    return {
-      fillColor: finalColor,
-      weight: 2,
-      opacity: 0.9,
-      color: finalColor,
-      dashArray: '',
-      fillOpacity: 0.6,
-    };
+    return { fillColor: finalColor, weight: 2, opacity: 0.9, color: finalColor, dashArray: '', fillOpacity: 0.6 };
   };
 
-  const getStateLabel = (state) => {
-    switch (state) {
-      case 'green':
-        return 'Habilitado';
-      case 'yellow':
-        return 'Precaución';
-      case 'red':
-        return 'Cerrado';
-      default:
-        return 'Desconocido';
-    }
-  };
+  const getStateLabel = (state) => (state === 'green' ? 'Habilitado' : state === 'yellow' ? 'Precaución' : state === 'red' ? 'Cerrado' : 'Desconocido');
 
   const onEachFeature = (feature, layer) => {
+    const p = feature.properties || {};
     let name = 'Zona';
     let zoneName = '';
-    let department = 'Cerro Largo';
-    let area = 'N/A';
+    let department = p.depto || 'Cerro Largo';
+    let area = p.area_km2 != null ? Number(p.area_km2).toFixed(2) : 'N/A';
 
-    if (feature.properties.municipio) {
-      name = feature.properties.municipio;
+    if (p.municipio) {
+      name = p.municipio;
       zoneName = name;
-      department = feature.properties.depto;
-      area = feature.properties.area_km2 ? feature.properties.area_km2.toFixed(2) : 'N/A';
-    } else if (feature.properties.serie) {
-      name = `Melo (${feature.properties.serie})`;
+    } else if (p.serie) {
+      name = `Melo (${p.serie})`;
       zoneName = name;
-      department = feature.properties.depto;
-      area = feature.properties.area_km2 ? feature.properties.area_km2.toFixed(2) : 'N/A';
     }
 
     layer.bindPopup(
@@ -308,15 +238,9 @@ function MapComponent({
     );
 
     layer.on({
-      mouseover: (e) => {
-        e.target.setStyle({ fillOpacity: 0.9 });
-      },
-      mouseout: (e) => {
-        e.target.setStyle({ fillOpacity: 0.6 });
-      },
-      click: () => {
-        // Sin acción de click: el estado se maneja desde AdminPanel/App
-      },
+      mouseover: (e) => e.target.setStyle({ fillOpacity: 0.9 }),
+      mouseout: (e) => e.target.setStyle({ fillOpacity: 0.6 }),
+      click: () => {},
     });
   };
 
@@ -346,25 +270,18 @@ function MapComponent({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {geoData && geoData.features.length > 0 && (
+        {/* 👉 Capa única desde combined_polygons */}
+        {combinedGeo && combinedGeo.features?.length > 0 && (
           <GeoJSON
-            data={geoData}
+            data={combinedGeo}
             style={getFeatureStyle}
             onEachFeature={onEachFeature}
-            key={`municipalities-${JSON.stringify(zoneStates)}`}
+            key={`combined-${JSON.stringify(zoneStates)}`}
           />
         )}
 
-        {meloAreaGeoData && meloAreaGeoData.features.length > 0 && (
-          <GeoJSON
-            data={meloAreaGeoData}
-            style={getFeatureStyle}
-            onEachFeature={onEachFeature}
-            key={`melo-area-${JSON.stringify(zoneStates)}`}
-          />
-        )}
-
-        {caminosData && caminosData.features.length > 0 && (
+        {/* Caminería */}
+        {caminosData && caminosData.features?.length > 0 && (
           <GeoJSON
             data={caminosData}
             style={(f) => getRoadStyle(f, currentZoom)}
@@ -374,7 +291,7 @@ function MapComponent({
           />
         )}
 
-        {/* Marcador de la ubicación del usuario */}
+        {/* Ubicación usuario */}
         {userLocation && (
           <Marker position={[userLocation.lat, userLocation.lng]} icon={gpsIcon}>
             <Popup>
@@ -391,7 +308,7 @@ function MapComponent({
           </Marker>
         )}
 
-        {/* Marcadores de ALERTA */}
+        {/* Alertas */}
         {Array.isArray(alerts) &&
           alerts.map((a) =>
             a && a.lat != null && a.lng != null ? (
@@ -407,12 +324,10 @@ function MapComponent({
             ) : null
           )}
 
-        <ZoomHandler onZoomChange={setCurrentZoom} />
+        <ZoomHandler onZoomChange={handleZoomChange} />
       </MapContainer>
     </div>
   );
 }
 
 export default MapComponent;
-
-
