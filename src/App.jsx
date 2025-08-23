@@ -78,7 +78,7 @@ function HomePage() {
     geoWatchIdRef.current = id;
   }, []);
 
-  // Limpieza solo al cerrar/recargar la página (no al cerrar el panel)
+  // Limpieza al cerrar/recargar la página (no al cerrar paneles)
   useEffect(() => {
     const cleanup = () => {
       if (geoWatchIdRef.current != null) {
@@ -90,18 +90,18 @@ function HomePage() {
     return () => window.removeEventListener("beforeunload", cleanup);
   }, []);
 
-  // Paneles / Modales
+  // Paneles / Modales y refs de botones (para anclar)
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
-  const reportBtnRef = useRef(null);
+  const reportBtnRef = useRef(null); // botón superior "Reporte"
 
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoAnchorRect, setInfoAnchorRect] = useState(null);
-  const infoBtnRef = useRef(null);
+  const infoBtnRef = useRef(null); // FAB inferior "Info"
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
-  const reportFabRef = useRef(null);
+  const reportFabRef = useRef(null); // FAB inferior "Reporte ciudadano"
 
   // Helper fetch JSON
   const fetchJson = useCallback(async (url, options = {}) => {
@@ -139,9 +139,7 @@ function HomePage() {
     if (!updatesMap || typeof updatesMap !== "object") return;
     setZoneStates((prev) => ({ ...prev, ...updatesMap }));
   };
-  const handleZonesLoad = (loadedZones) => {
-    if (Array.isArray(loadedZones)) setZones(loadedZones);
-  };
+  const handleZonesLoad = (loadedZones) => { if (Array.isArray(loadedZones)) setZones(loadedZones); };
 
   // Alertas visibles
   const loadAlerts = useCallback(async () => {
@@ -169,24 +167,45 @@ function HomePage() {
     return () => clearInterval(t);
   }, [loadAlerts]);
 
-  // UI handlers (anclajes corregidos)
+  // --------- Anclaje: recalcular posición al abrir, resize o scroll ----------
+  const recalcAnchors = useCallback(() => {
+    if (infoOpen && infoBtnRef.current) {
+      setInfoAnchorRect(infoBtnRef.current.getBoundingClientRect());
+    }
+    if (reportOpen && reportBtnRef.current) {
+      setReportAnchorRect(reportBtnRef.current.getBoundingClientRect());
+    }
+    if (reportModalOpen && reportFabRef.current) {
+      setReportModalAnchorRect(reportFabRef.current.getBoundingClientRect());
+    }
+  }, [infoOpen, reportOpen, reportModalOpen]);
+
+  useEffect(() => {
+    const onResize = () => recalcAnchors();
+    const onScroll = () => recalcAnchors();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [recalcAnchors]);
+
+  // UI handlers (siempre setear anchorRect ANTES de abrir)
   const toggleReportPanel = () => {
-    const btn = reportBtnRef.current;
-    if (btn) setReportAnchorRect(btn.getBoundingClientRect());
+    if (reportBtnRef.current) setReportAnchorRect(reportBtnRef.current.getBoundingClientRect());
     setReportOpen((v) => !v);
   };
   const closeReportPanel = () => setReportOpen(false);
 
   const toggleInfo = () => {
-    const btn = infoBtnRef.current;
-    if (btn) setInfoAnchorRect(btn.getBoundingClientRect()); // ✅ anclado al botón
+    if (infoBtnRef.current) setInfoAnchorRect(infoBtnRef.current.getBoundingClientRect());
     setInfoOpen((v) => !v);
   };
   const closeInfoPanel = () => setInfoOpen(false);
 
   const handleToggleReportModal = () => {
-    const btn = reportFabRef.current;
-    if (btn) setReportModalAnchorRect(btn.getBoundingClientRect()); // ✅ anclado al FAB
+    if (reportFabRef.current) setReportModalAnchorRect(reportFabRef.current.getBoundingClientRect());
     setReportModalOpen((prev) => !prev);
   };
   const closeReportModal = () => setReportModalOpen(false);
@@ -206,6 +225,7 @@ function HomePage() {
           {refreshing ? "Actualizando..." : "Actualizar Mapa"}
         </button>
 
+        {/* Botón que abre ReportHubPanel (panel de gestión/reportes) */}
         <button
           ref={reportBtnRef}
           onClick={toggleReportPanel}
@@ -232,12 +252,20 @@ function HomePage() {
         className="fixed z-[1000] flex flex-col items-start gap-2"
         style={{ bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))", left: "max(1rem, env(safe-area-inset-left, 1rem))" }}
       >
+        {/* Botón que abre InfoPanel (panel de info) */}
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
+
+        {/* FAB que abre ReportModal (reporte ciudadano) */}
         <ReportButton ref={reportFabRef} onClick={handleToggleReportModal} />
       </div>
 
-      {/* Paneles y modales (anclados a sus botones) */}
-      <ReportHubPanel open={reportOpen} anchorRect={reportAnchorRect} onClose={closeReportPanel} />
+      {/* Paneles y modales anclados a SUS botones */}
+      <ReportHubPanel
+        open={reportOpen}
+        anchorRect={reportAnchorRect}
+        onClose={closeReportPanel}
+        buttonRef={reportBtnRef}   // por si el componente lo usa
+      />
 
       <InfoPanel
         open={infoOpen}
