@@ -1,15 +1,3 @@
-Tenés un **desacople de nombres** (acentos, mayúsculas y paréntesis). Lo soluciono normalizando ambos lados. Te dejo **`MapComponent.jsx` completo** con:
-
-* `norm()` que quita tildes, espacios y signos.
-* `normalizedStates` derivado del JSON del backend.
-* Lookup por nombre normalizado (municipios y series tipo **“Melo (GBA)”** → `melogba`).
-* Log de zonas sin match para depurar.
-
----
-
-### `src/components/MapComponent.jsx` (completo, con normalización de nombres)
-
-```jsx
 // src/components/MapComponent.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
@@ -342,6 +330,3 @@ function MapComponent({
 }
 
 export default MapComponent;
-```
-
-Con esto tus claves como **`"ACEGUÁ"`, `"ARÉVALO"`, `"ISIDORO NOBLÍA"`** y series **`"Melo (GBA)"`** matchean aunque en el GeoJSON varíe acentuación, mayúsculas o paréntesis. Si alguna zona todavía no pinta, mirá la consola: te listará los nombres sin match.
