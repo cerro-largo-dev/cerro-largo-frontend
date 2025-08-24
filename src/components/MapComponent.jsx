@@ -1,9 +1,9 @@
 // src/components/MapComponent.jsx
 import React, {
-  useState,
   useEffect,
-  useRef,
   useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
   MapContainer,
@@ -15,17 +15,14 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 
-// Asegurate de tener estos assets (ajusta paths si cambian)
 import combinedPolygonsUrl from "../assets/combined_polygons.geojson?url";
-import caminosDataUrl from "../assets/camineria_cerro_largo.json?url";
-
 import {
   ROAD_VIS_THRESHOLD,
   getRoadStyle,
   onEachRoadFeature,
 } from "@/utils/caminosUtils";
 
-// ------- Fix de íconos por defecto de Leaflet (evita 404 de imágenes) -------
+// ---------- Fix íconos por defecto Leaflet ----------
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -53,7 +50,7 @@ const gpsIcon = new L.Icon({
   popupAnchor: [0, -12],
 });
 
-// Ícono de atención (alertas/avisos)
+// Ícono de atención (alertas)
 const ICON_SIZE = 28;
 const attentionIcon = L.divIcon({
   className: "attention-pin",
@@ -69,11 +66,10 @@ const attentionIcon = L.divIcon({
   popupAnchor: [0, -(ICON_SIZE - 8)],
 });
 
-// ----------------- Utiles locales -----------------
+// ---------- Utils locales ----------
 const stateColors = { green: "#22c55e", yellow: "#eab308", red: "#ef4444" };
 const LOADING_FILL = "#e5e7eb";
 const LOADING_STROKE = "#9ca3af";
-
 const norm = (s = "") =>
   String(s)
     .toLowerCase()
@@ -81,7 +77,7 @@ const norm = (s = "") =>
     .replace(/\p{Diacritic}/gu, "")
     .replace(/[\s\-_().,/]+/g, "");
 
-// Control para escuchar el zoom actual del mapa
+// Control de zoom (para disparar el lazy-load)
 function ZoomWatcher({ onZoom }) {
   const map = useMap();
   useEffect(() => {
@@ -93,23 +89,18 @@ function ZoomWatcher({ onZoom }) {
   return null;
 }
 
-// ============================================================================
-// Componente principal
-// ============================================================================
 /**
- * Props esperadas (todas opcionales salvo las de mapa):
- * - zoneStates: objeto { [zoneName]: 'green'|'yellow'|'red' | {state:'...'} }
- * - onZoneStatesLoad(zones:string[])
- * - onZoneStateChange(name, state)
- * - onZonesLoad(zones:string[])
- * - userLocation: { lat, lng }
- * - alerts: [{ id, lat, lng, titulo, descripcion }]
+ * Props opcionales:
+ *  - zoneStates
+ *  - onZonesLoad
+ *  - onZoneStatesLoad
+ *  - userLocation
+ *  - alerts
  */
 export default function MapComponent({
   zoneStates,
-  onZoneStatesLoad,
-  onZoneStateChange, // reservado por compatibilidad
   onZonesLoad,
+  onZoneStatesLoad,
   userLocation,
   alerts = [],
 }) {
@@ -117,12 +108,14 @@ export default function MapComponent({
   const [currentZoom, setCurrentZoom] = useState(9);
 
   const [combinedGeo, setCombinedGeo] = useState(null);
-  const [caminosData, setCaminosData] = useState(null);
 
-  // Centro inicial en Cerro Largo
+  // Caminería: se carga LAZY cuando currentZoom >= ROAD_VIS_THRESHOLD
+  const [roadsUrl, setRoadsUrl] = useState(null);      // URL del asset (import la primera vez)
+  const [caminosData, setCaminosData] = useState(null); // GeoJSON ya parseado
+
   const mapCenter = useMemo(() => [-32.35, -54.2], []);
 
-  // Normaliza estados (permite { name: 'green' } o { name: {state:'green'} })
+  // Normaliza estados
   const normalizedStates = useMemo(() => {
     const out = {};
     if (!zoneStates) return out;
@@ -138,28 +131,20 @@ export default function MapComponent({
     return out;
   }, [zoneStates]);
 
-  // Cargar assets geo (polígonos y caminería)
+  // Cargar polígonos (siempre)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [polyRes, camRes] = await Promise.all([
-          fetch(combinedPolygonsUrl, { cache: "no-store" }),
-          fetch(caminosDataUrl, { cache: "no-store" }),
-        ]);
-        if (!(polyRes.ok && camRes.ok)) throw new Error("No se pudieron cargar assets del mapa");
-        const [polyJson, camJson] = await Promise.all([
-          polyRes.json(),
-          camRes.json(),
-        ]);
+        const res = await fetch(combinedPolygonsUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
         if (cancelled) return;
+        setCombinedGeo(json);
 
-        setCombinedGeo(polyJson);
-        setCaminosData(camJson);
-
-        // Derivar lista de zonas para la UI superior, si se necesita
+        // Derivar lista de zonas
         const allZones = [];
-        (polyJson.features || []).forEach((f) => {
+        (json.features || []).forEach((f) => {
           const p = f.properties || {};
           if (p.municipio) allZones.push(p.municipio);
           else if (p.serie) allZones.push(`Melo (${p.serie})`);
@@ -167,8 +152,7 @@ export default function MapComponent({
         onZonesLoad && onZonesLoad(allZones);
         onZoneStatesLoad && onZoneStatesLoad(normalizedStates);
       } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("Error cargando datos del mapa:", e);
+        console.error("Error cargando polígonos:", e);
       }
     })();
     return () => {
@@ -177,7 +161,42 @@ export default function MapComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Estilo de polígonos (municipios/series) según estado
+  // LAZY-IMPORT de caminería cuando el zoom alcanza el umbral
+  useEffect(() => {
+    let cancelled = false;
+
+    if (currentZoom >= ROAD_VIS_THRESHOLD) {
+      (async () => {
+        try {
+          // 1) Import dinámico del asset SOLO la primera vez
+          let url = roadsUrl;
+          if (!url) {
+            const mod = await import(
+              /* @vite-ignore */ "../assets/camineria_cerro_largo.json?url"
+            );
+            url = mod.default;
+            if (!cancelled) setRoadsUrl(url);
+          }
+
+          // 2) Fetch + parse (si aún no cargamos el contenido)
+          if (!caminosData && url) {
+            const res = await fetch(url, { cache: "force-cache" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            if (!cancelled) setCaminosData(json);
+          }
+        } catch (e) {
+          console.error("Lazy-load caminería:", e);
+        }
+      })();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentZoom, roadsUrl, caminosData]);
+
+  // Estilo de polígonos según estado
   const polygonStyle = (feature) => {
     const p = feature?.properties || {};
     const zoneName = p.municipio ? p.municipio : p.serie ? `Melo (${p.serie})` : "";
@@ -245,10 +264,10 @@ export default function MapComponent({
           />
         )}
 
-        {/* Caminería: invisible al inicio; tenue y progresiva al acercar */}
+        {/* Caminería (lazy-load al alcanzar el umbral de zoom) */}
         {showRoads && caminosData && (caminosData.features?.length || 0) > 0 && (
           <GeoJSON
-            key={`roads-at-zoom-${currentZoom}`} // fuerza re-estilo al cambiar zoom
+            key={`roads-at-zoom-${currentZoom}`}
             data={caminosData}
             style={(f) => getRoadStyle(f, currentZoom)}
             onEachFeature={onEachRoadFeature}
@@ -256,23 +275,25 @@ export default function MapComponent({
           />
         )}
 
-        {/* Ubicación del usuario (opcional) */}
-        {userLocation && userLocation.lat != null && userLocation.lng != null && (
-          <Marker position={[userLocation.lat, userLocation.lng]} icon={gpsIcon}>
-            <Popup>
-              <div style={{ textAlign: "center" }}>
-                <strong>Tu ubicación</strong>
-                <br />
-                <small>
-                  Lat: {Number(userLocation.lat).toFixed(6)} <br />
-                  Lng: {Number(userLocation.lng).toFixed(6)}
-                </small>
-              </div>
-            </Popup>
-          </Marker>
-        )}
+        {/* Ubicación del usuario */}
+        {userLocation &&
+          userLocation.lat != null &&
+          userLocation.lng != null && (
+            <Marker position={[userLocation.lat, userLocation.lng]} icon={gpsIcon}>
+              <Popup>
+                <div style={{ textAlign: "center" }}>
+                  <strong>Tu ubicación</strong>
+                  <br />
+                  <small>
+                    Lat: {Number(userLocation.lat).toFixed(6)} <br />
+                    Lng: {Number(userLocation.lng).toFixed(6)}
+                  </small>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
-        {/* Alertas (opcional) */}
+        {/* Alertas */}
         {Array.isArray(alerts) &&
           alerts.map((a) =>
             a && a.lat != null && a.lng != null ? (
