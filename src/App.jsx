@@ -1,10 +1,17 @@
-// src/App.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// src/App.jsx — lazy routes para AdminPanel y ReportsPanel
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  lazy,
+  Suspense,
+} from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./App.css";
 
 import MapComponent from "./components/MapComponent";
-import AdminPanel from "./components/AdminPanel";
 import ReportButton from "./components/Reportes/ReportButton";
 import ReportModal from "./components/Reportes/ReportModal";
 import ReportHubPanel from "./components/ReportHubPanel";
@@ -12,7 +19,10 @@ import InfoButton from "./components/InfoButton";
 import InfoPanel from "./components/InfoPanel";
 import SiteBanner from "./components/SiteBanner";
 // import AlertWidget from "./components/AlertWidget";
-import ReportsPanel from "./components/ReportsPanel";
+
+// ❗ Lazy-loaded routes
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const ReportsPanel = lazy(() => import("./components/ReportsPanel"));
 
 // ---------------------------------------------------------------------------
 // Util: BACKEND_URL
@@ -22,12 +32,14 @@ function useBackendUrl() {
     const be =
       (typeof import.meta !== "undefined" &&
         import.meta.env &&
-        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+        (import.meta.env.VITE_REACT_APP_BACKEND_URL ||
+          import.meta.env.VITE_BACKEND_URL)) ||
       (typeof process !== "undefined" &&
         process.env &&
         (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       "https://cerro-largo-backend.onrender.com";
-    if (typeof window !== "undefined") window.BACKEND_URL = String(be).replace(/\/$/, "");
+    if (typeof window !== "undefined")
+      window.BACKEND_URL = String(be).replace(/\/$/, "");
   }, []);
 
   return useMemo(() => {
@@ -35,7 +47,8 @@ function useBackendUrl() {
       (typeof window !== "undefined" && window.BACKEND_URL) ||
       (typeof import.meta !== "undefined" &&
         import.meta.env &&
-        (import.meta.env.VITE_REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL)) ||
+        (import.meta.env.VITE_REACT_APP_BACKEND_URL ||
+          import.meta.env.VITE_BACKEND_URL)) ||
       (typeof process !== "undefined" &&
         process.env &&
         (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
@@ -79,7 +92,9 @@ function HomePage() {
         setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       () => {
-        setGeoError("No se pudo obtener GPS; usando ubicación aproximada de Cerro Largo.");
+        setGeoError(
+          "No se pudo obtener GPS; usando ubicación aproximada de Cerro Largo."
+        );
         setUserLocation({ lat: -32.3667, lng: -54.1667 });
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
@@ -91,7 +106,9 @@ function HomePage() {
   useEffect(() => {
     const cleanup = () => {
       if (geoWatchIdRef.current != null) {
-        try { navigator.geolocation.clearWatch(geoWatchIdRef.current); } catch {}
+        try {
+          navigator.geolocation.clearWatch(geoWatchIdRef.current);
+        } catch {}
         geoWatchIdRef.current = null;
       }
     };
@@ -117,8 +134,12 @@ function HomePage() {
     const res = await fetch(url, { credentials: "include", ...options });
     const ct = res.headers.get("content-type") || "";
     const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
-    if (!ct.includes("application/json")) throw new Error(`No-JSON: ${text.slice(0, 200)}`);
+    if (!res.ok)
+      throw new Error(
+        `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`
+      );
+    if (!ct.includes("application/json"))
+      throw new Error(`No-JSON: ${text.slice(0, 200)}`);
     try {
       return JSON.parse(text);
     } catch {
@@ -130,7 +151,9 @@ function HomePage() {
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
-      const data = await fetchJson(`${window.BACKEND_URL}/api/admin/zones/states`);
+      const data = await fetchJson(
+        `${window.BACKEND_URL}/api/admin/zones/states`
+      );
       if (data?.success && data.states) {
         const mapping = {};
         Object.entries(data.states).forEach(([name, info]) => {
@@ -169,7 +192,9 @@ function HomePage() {
 
   const loadAlerts = useCallback(async () => {
     try {
-      const json = await fetchJson(`${window.BACKEND_URL}/api/reportes/visibles`);
+      const json = await fetchJson(
+        `${window.BACKEND_URL}/api/reportes/visibles`
+      );
       if (json?.ok && Array.isArray(json.reportes)) {
         setAlerts(
           json.reportes
@@ -188,11 +213,10 @@ function HomePage() {
     }
   }, [fetchJson]);
 
-  // Esperar a que el mapa “asiente” (carga inicial de página + frame ocioso)
+  // Esperar a que el mapa “asiente”
   useEffect(() => {
     const markSettledSoon = () => setMapSettled(true);
     if (document.readyState === "complete") {
-      // pequeño idle para dejar pintar el mapa
       if ("requestIdleCallback" in window) {
         // @ts-ignore
         window.requestIdleCallback(markSettledSoon, { timeout: 1500 });
@@ -215,23 +239,20 @@ function HomePage() {
 
   // Iniciar/pausar polling de alertas SOLO cuando states+map estén listos
   useEffect(() => {
-    // limpiar cualquier intervalo previo
     if (alertsIntervalRef.current) {
       clearInterval(alertsIntervalRef.current);
       alertsIntervalRef.current = null;
     }
-
-    if (!(statesReady && mapSettled)) return; // prioridad a states
+    if (!(statesReady && mapSettled)) return;
 
     let stopped = false;
 
     const start = async () => {
-      await loadAlerts(); // primera carga (ya con todo listo)
+      await loadAlerts();
       if (stopped) return;
       alertsIntervalRef.current = setInterval(loadAlerts, ALERTS_POLL_MS);
     };
 
-    // pausar cuando la pestaña no está visible; reanudar al volver
     const onVis = async () => {
       if (document.visibilityState === "hidden") {
         if (alertsIntervalRef.current) {
@@ -285,19 +306,22 @@ function HomePage() {
 
   // UI handlers (siempre setear anchorRect ANTES de abrir)
   const toggleReportPanel = () => {
-    if (reportBtnRef.current) setReportAnchorRect(reportBtnRef.current.getBoundingClientRect());
+    if (reportBtnRef.current)
+      setReportAnchorRect(reportBtnRef.current.getBoundingClientRect());
     setReportOpen((v) => !v);
   };
   const closeReportPanel = () => setReportOpen(false);
 
   const toggleInfo = () => {
-    if (infoBtnRef.current) setInfoAnchorRect(infoBtnRef.current.getBoundingClientRect());
+    if (infoBtnRef.current)
+      setInfoAnchorRect(infoBtnRef.current.getBoundingClientRect());
     setInfoOpen((v) => !v);
   };
   const closeInfoPanel = () => setInfoOpen(false);
 
   const handleToggleReportModal = () => {
-    if (reportFabRef.current) setReportModalAnchorRect(reportFabRef.current.getBoundingClientRect());
+    if (reportFabRef.current)
+      setReportModalAnchorRect(reportFabRef.current.getBoundingClientRect());
     setReportModalOpen((prev) => !prev);
   };
   const closeReportModal = () => setReportModalOpen(false);
@@ -306,8 +330,16 @@ function HomePage() {
   // Render
   // -------------------------------------------------------------------------
   return (
-    <main id="main" role="main" tabIndex={-1} className="relative w-full h-screen" style={{ minHeight: "100vh" }}>
-      <h1 className="sr-only">Caminos que conectan – Gobierno de Cerro Largo</h1>
+    <main
+      id="main"
+      role="main"
+      tabIndex={-1}
+      className="relative w-full h-screen"
+      style={{ minHeight: "100vh" }}
+    >
+      <h1 className="sr-only">
+        Caminos que conectan – Gobierno de Cerro Largo
+      </h1>
 
       {/* Barra superior */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-2">
@@ -335,7 +367,9 @@ function HomePage() {
       <MapComponent
         zones={zones}
         zoneStates={zoneStates}
-        onZoneStatesLoad={(initialStates) => initialStates && setZoneStates(initialStates)}
+        onZoneStatesLoad={(initialStates) =>
+          initialStates && setZoneStates(initialStates)
+        }
         onZoneStateChange={handleZoneStateChange}
         onZonesLoad={handleZonesLoad}
         userLocation={userLocation}
@@ -345,7 +379,10 @@ function HomePage() {
       {/* FABs inferior-izquierda */}
       <div
         className="fixed z-[1000] flex flex-col items-start gap-2"
-        style={{ bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))", left: "max(1rem, env(safe-area-inset-left, 1rem))" }}
+        style={{
+          bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))",
+          left: "max(1rem, env(safe-area-inset-left, 1rem))",
+        }}
       >
         {/* Botón que abre InfoPanel (panel de info) */}
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
@@ -385,7 +422,7 @@ function HomePage() {
 }
 
 // ---------------------------------------------------------------------------
-// App con Router
+// App con Router (lazy routes)
 // ---------------------------------------------------------------------------
 export default function App() {
   useBackendUrl(); // publica BACKEND_URL en window
@@ -393,7 +430,8 @@ export default function App() {
   // Registrar SW
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      const onLoad = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+      const onLoad = () =>
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
       window.addEventListener("load", onLoad);
       return () => window.removeEventListener("load", onLoad);
     }
@@ -406,14 +444,23 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <AdminPanel
-              onRefreshZoneStates={() => {}}
-              onBulkZoneStatesUpdate={() => {}}
-              onZoneStateChange={() => {}}
-            />
+            <Suspense fallback={null}>
+              <AdminPanel
+                onRefreshZoneStates={() => {}}
+                onBulkZoneStatesUpdate={() => {}}
+                onZoneStateChange={() => {}}
+              />
+            </Suspense>
           }
         />
-        <Route path="/admin/reportes" element={<ReportsPanel />} />
+        <Route
+          path="/admin/reportes"
+          element={
+            <Suspense fallback={null}>
+              <ReportsPanel />
+            </Suspense>
+          }
+        />
         <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
