@@ -9,16 +9,16 @@ export const ROAD_VIS_THRESHOLD = 12; // p.ej. mapa arranca en 9; no se ve hasta
 // Curvas de estilo según zoom
 function opacityForZoom(z) {
   if (z < 11) return 0.00; // totalmente oculto
-  if (z < 12) return 0.12; // apenas sugerido
-  if (z < 13) return 0.25; // tenue
-  if (z < 14) return 0.45; // medio
-  if (z < 15) return 0.70; // fuerte
+  if (z < 12) return 0.20; // apenas sugerido
+  if (z < 13) return 0.30; // tenue
+  if (z < 14) return 0.50; // medio
+  if (z < 15) return 0.80; // fuerte
   return 1.00;             // muy nítido
 }
 
 function weightForZoom(baseWeight, z) {
   if (z <= 9)  return Math.max(0.5, baseWeight * 0.45);
-  if (z <= 11) return Math.max(0.8, baseWeight * 0.70);
+  if (z <= 11) return Math.max(0.8, baseWeight * 0.8);
   if (z >= 14) return baseWeight * 1.25;
   if (z >= 15) return baseWeight * 1.6;
   return baseWeight; // ~12–13
