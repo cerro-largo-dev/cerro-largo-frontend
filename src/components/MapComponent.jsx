@@ -7,7 +7,7 @@ import combinedPolygonsUrl from '../assets/combined_polygons.geojson?url';
 import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
 import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
-// ----------------- Iconos Leaflet por defecto -----------------
+// ----------------- Iconos Leaflet -----------------
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -15,7 +15,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Ícono GPS
 const gpsIcon = new L.Icon({
   iconUrl:
     'data:image/svg+xml;base64,' +
@@ -31,25 +30,21 @@ const gpsIcon = new L.Icon({
   className: 'gps-marker-icon',
 });
 
-// --------- Ícono de ATENCIÓN (discreto, borde suave, esquinas redondeadas) ---------
-const ICON_SIZE = 28;
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${ICON_SIZE}" height="${ICON_SIZE}" viewBox="0 0 24 24" aria-hidden="true">
-      <!-- Cuerpo con esquinas redondeadas -->
-      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"
-            fill="#FDE68A" stroke="#F59E0B" stroke-opacity="0.55" stroke-width="1.25"/>
-      <!-- Signo de exclamación, menos contrastado -->
-      <rect x="11" y="7" width="2" height="7" rx="1"
-            fill="#92400E" fill-opacity="0.85"/>
-      <circle cx="12" cy="16.5" r="1.1"
-              fill="#92400E" fill-opacity="0.85"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
+      <defs><filter id="shadow"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/></filter></defs>
+      <g filter="url(#shadow)">
+        <path d="M12 2 L22 20 H2 Z" fill="#fbbf24" stroke="#111827" stroke-width="1.5"/>
+        <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
+        <circle cx="12" cy="16.5" r="1.2" fill="#111827"/>
+      </g>
     </svg>
   `,
-  iconSize: [ICON_SIZE, ICON_SIZE],
-  iconAnchor: [ICON_SIZE / 2, ICON_SIZE - 4],
-  popupAnchor: [0, -(ICON_SIZE - 8)],
+  iconSize: [34, 34],
+  iconAnchor: [17, 30],
+  popupAnchor: [0, -26],
 });
 
 // ----------------- Util estado/estilos -----------------
@@ -62,7 +57,7 @@ const norm = (s = '') =>
   String(s)
     .toLowerCase()
     .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-    .replace(/[\s\-_().,/]+/g, ''); // "Melo (GBA)" -> "melogba", "ISIDORO NOBLÍA" -> "isidoronoblia"
+    .replace(/[\s\-_().,/]+/g, ''); // ej: "Melo (GBA)" -> "melogba", "ISIDORO NOBLÍA" -> "isidoronoblia"
 
 // ----------------- Zoom handler -----------------
 function ZoomHandler({ onZoomChange }) {
@@ -80,12 +75,12 @@ function ZoomHandler({ onZoomChange }) {
 // Componente
 // ============================================================================
 function MapComponent({
-  zoneStates,           // mapeo recibido desde App (plano o {states:{...}})
+  zoneStates,           // { "ACEGUÁ": {state: "red"}, "Melo (GBA)": {...}, ... } o flatten
   onZoneStatesLoad,
   onZoneStateChange,
   onZonesLoad,
   userLocation,
-  alerts = [],          // [{ id, lat, lng, titulo, descripcion }]
+  alerts = [],
 }) {
   const [combinedGeo, setCombinedGeo] = useState(null);
   const [caminosData, setCaminosData] = useState(null);
@@ -94,21 +89,17 @@ function MapComponent({
   const [currentZoom, setCurrentZoom] = useState(9);
   const mapRef = useRef(null);
 
-  // flags/refs para reintentos de estados
-  const hasStatesRef = useRef(false);
-  const lastSuccessAtRef = useRef(0);
-  const retryTimersRef = useRef([]);
-
-  const statesLoadedProp = useMemo(
+  const statesLoaded = useMemo(
     () => zoneStates && Object.keys(zoneStates).length > 0,
     [zoneStates]
   );
 
-  // Deriva un mapa normalizado: clave normalizada -> "green|yellow|red"
+  // Deriva un mapa normalizado de estados: clave normalizada -> "green|yellow|red"
   const normalizedStates = useMemo(() => {
     const out = {};
     if (!zoneStates) return out;
 
+    // admite formato {states:{...}} o plano
     const base = zoneStates.states && typeof zoneStates.states === 'object'
       ? zoneStates.states
       : zoneStates;
@@ -134,7 +125,7 @@ function MapComponent({
   const mapCenter = [-32.35, -54.20];
   const handleZoomChange = (z) => setCurrentZoom(z);
 
-  // Helper: fetch JSON con timeout/backoff
+  // Helper: fetch JSON
   const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 2, baseDelay = 500, timeoutMs = 8000 } = {}) => {
     for (let i = 0; i <= retries; i++) {
       try {
@@ -153,82 +144,34 @@ function MapComponent({
     }
   }, []);
 
-  const statesUrl = useCallback((noCache = false) => {
-    return `${BACKEND_URL}/api/admin/zones/states${noCache ? `?__ts=${Date.now()}` : ''}`;
-  }, [BACKEND_URL]);
-
-  // Carga de estados (doble: normal y no-cache)
-  const loadZoneStates = useCallback(async ({ forceNoCache = false } = {}) => {
-    const url = statesUrl(!!forceNoCache);
-    const data = await fetchJsonRetry(url);
-
-    // Normalizar API -> mapa plano {name: "green|yellow|red"}
-    const stateMap = {};
-    if (data && typeof data === 'object') {
-      const src = data.states && typeof data.states === 'object' ? data.states : data;
-      for (const [zoneName, info] of Object.entries(src)) {
-        const val = typeof info === 'string' ? info : (info && info.state);
-        if (val) stateMap[zoneName] = String(val).toLowerCase();
-      }
-    }
-
-    if (Object.keys(stateMap).length > 0) {
-      hasStatesRef.current = true;
-      lastSuccessAtRef.current = Date.now();
-      onZoneStatesLoad && onZoneStatesLoad(stateMap);
-    }
-    return stateMap;
-  }, [fetchJsonRetry, onZoneStatesLoad, statesUrl]);
-
-  const hardReloadStates = useCallback(async () => {
-    try { await loadZoneStates({ forceNoCache: false }); } catch {}
-    try { await loadZoneStates({ forceNoCache: true  }); } catch {}
-  }, [loadZoneStates]);
-
-  // Exponer para debug manual
+  // Carga: estados + GeoJSON combinado + caminería
   useEffect(() => {
-    if (typeof window !== 'undefined') (window).forceZoneStatesReload = hardReloadStates;
-    return () => { if (typeof window !== 'undefined') delete (window).forceZoneStatesReload; };
-  }, [hardReloadStates]);
-
-  // Carga inicial: estados + assets
-  useEffect(() => {
-    let cancelled = false;
-
-    const start = async () => {
-      // Estados primero (doble)
-      await hardReloadStates();
-      if (cancelled) return;
-
-      // Reintentos si aún no hay estados
-      if (!hasStatesRef.current) {
-        const MAX_TRIES = 3;
-        for (let i = 0; i < MAX_TRIES && !cancelled && !hasStatesRef.current; i++) {
-          const delay = 600 * Math.pow(2, i);
-          await new Promise(r => {
-            const t = setTimeout(r, delay);
-            retryTimersRef.current.push(t);
-          });
-          if (cancelled) return;
-          try { await loadZoneStates({ forceNoCache: true }); } catch {}
-        }
+    const loadData = async () => {
+      try {
+        // Estados (permite plano o {states})
+        const data = await fetchJsonRetry(`${BACKEND_URL}/api/admin/zones/states`);
+        onZoneStatesLoad && onZoneStatesLoad(data?.states || data || {});
+      } catch (e) {
+        console.warn('No se pudo cargar estados:', e.message);
       }
 
-      // Assets de mapa (polígonos + caminería)
       try {
         const [combinedRes, caminosRes] = await Promise.all([
           fetch(combinedPolygonsUrl, { cache: 'no-store' }),
           fetch(caminosDataUrl, { cache: 'no-store' }),
         ]);
+
         if (!(combinedRes.ok && caminosRes.ok)) throw new Error('GeoJSON assets no disponibles');
 
-        const [combinedJson, caminosJson] = await Promise.all([combinedRes.json(), caminosRes.json()]);
-        if (cancelled) return;
+        const [combinedJson, caminosJson] = await Promise.all([
+          combinedRes.json(),
+          caminosRes.json(),
+        ]);
 
         setCombinedGeo(combinedJson);
         setCaminosData(caminosJson);
 
-        // Listado de zonas
+        // Listado de zonas para otros componentes (mismos nombres que usamos para el match)
         const allZones = [];
         (combinedJson.features || []).forEach((f) => {
           const p = f.properties || {};
@@ -237,31 +180,24 @@ function MapComponent({
         });
         setZones(allZones);
         onZonesLoad && onZonesLoad(allZones);
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Error cargando datos del mapa:', err);
-          setMessage({ type: 'error', text: 'Error al cargar datos del mapa' });
-        }
+      } catch (error) {
+        console.error('Error cargando datos del mapa:', error);
+        setMessage({ type: 'error', text: 'Error al cargar datos del mapa' });
       }
     };
-
-    start();
-    return () => {
-      cancelled = true;
-      retryTimersRef.current.forEach(t => clearTimeout(t));
-      retryTimersRef.current = [];
-    };
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Depuración: mostrar zonas del GeoJSON que no matchean contra el API
+  // Depuración: muestra zonas del GeoJSON que no matchean contra el API
   useEffect(() => {
     if (!combinedGeo || !Object.keys(normalizedStates).length) return;
     const misses = new Set();
     for (const f of combinedGeo.features || []) {
       const p = f.properties || {};
       const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
-      if (zoneName && !normalizedStates[norm(zoneName)]) misses.add(zoneName);
+      if (!zoneName) continue;
+      if (!normalizedStates[norm(zoneName)]) misses.add(zoneName);
     }
     if (misses.size) console.debug('Zonas sin match de estado (normalizado):', Array.from(misses));
   }, [combinedGeo, normalizedStates]);
@@ -271,7 +207,7 @@ function MapComponent({
     const p = feature.properties || {};
     const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
 
-    if (!Object.keys(normalizedStates).length && !statesLoadedProp) {
+    if (!Object.keys(normalizedStates).length) {
       return { fillColor: LOADING_FILL, weight: 1.5, opacity: 0.8, color: LOADING_STROKE, dashArray: '', fillOpacity: 0.25 };
     }
 
@@ -371,7 +307,7 @@ function MapComponent({
           </Marker>
         )}
 
-        {/* Alertas visibles */}
+        {/* Alertas */}
         {Array.isArray(alerts) &&
           alerts.map((a) =>
             a && a.lat != null && a.lng != null ? (
