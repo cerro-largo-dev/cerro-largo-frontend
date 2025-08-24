@@ -1,4 +1,4 @@
-// src/App.jsx — lazy routes para AdminPanel y ReportsPanel
+// src/App.jsx — con ErrorBoundary + Suspense fallback visibles
 import React, {
   useCallback,
   useEffect,
@@ -11,6 +11,7 @@ import React, {
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./App.css";
 
+// --- Componentes base (no lazy para mantener la home estable)
 import MapComponent from "./components/MapComponent";
 import ReportButton from "./components/Reportes/ReportButton";
 import ReportModal from "./components/Reportes/ReportModal";
@@ -18,11 +19,77 @@ import ReportHubPanel from "./components/ReportHubPanel";
 import InfoButton from "./components/InfoButton";
 import InfoPanel from "./components/InfoPanel";
 import SiteBanner from "./components/SiteBanner";
-// import AlertWidget from "./components/AlertWidget";
 
-// ❗ Lazy-loaded routes
+// --- Rutas pesadas en lazy
 const AdminPanel = lazy(() => import("./components/AdminPanel"));
 const ReportsPanel = lazy(() => import("./components/ReportsPanel"));
+
+// ---------------------------------------------------------------------------
+// ErrorBoundary (evita pantalla en blanco si algo explota)
+// ---------------------------------------------------------------------------
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, msg: "" };
+  }
+  static getDerivedStateFromError(err) {
+    return { hasError: true, msg: (err && err.message) || "Error inesperado" };
+  }
+  componentDidCatch(err, info) {
+    // Log mínimo; en prod podés enviar a tu backend
+    // eslint-disable-next-line no-console
+    console.error("App ErrorBoundary:", err, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            textAlign: "center",
+          }}
+        >
+          <div>
+            <h1 style={{ fontSize: 20, marginBottom: 8 }}>
+              Ocurrió un error en la aplicación
+            </h1>
+            <p style={{ opacity: 0.8, marginBottom: 16 }}>
+              {this.state.msg || "Reintentá recargar la página."}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700"
+            >
+              Recargar
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fallback visual (para Suspense y cargas perezosas)
+// ---------------------------------------------------------------------------
+function FullPageFallback({ text = "Cargando…" }) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        fontSize: 16,
+      }}
+    >
+      <div className="animate-pulse">{text}</div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Util: BACKEND_URL
@@ -69,7 +136,7 @@ function HomePage() {
   const [userLocation, setUserLocation] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ALERTAS (visibles) — se activan recién cuando mapa+states están listos
+  // ALERTAS (visibles)
   const [alerts, setAlerts] = useState([]);
   const [statesReady, setStatesReady] = useState(false);
   const [mapSettled, setMapSettled] = useState(false);
@@ -84,7 +151,7 @@ function HomePage() {
       setUserLocation({ lat: -32.3667, lng: -54.1667 });
       return;
     }
-    if (geoWatchIdRef.current != null) return; // ya mirando
+    if (geoWatchIdRef.current != null) return;
 
     const id = navigator.geolocation.watchPosition(
       (pos) => {
@@ -102,7 +169,7 @@ function HomePage() {
     geoWatchIdRef.current = id;
   }, []);
 
-  // Limpieza al cerrar/recargar la página (no al cerrar paneles)
+  // Limpieza de geoloc
   useEffect(() => {
     const cleanup = () => {
       if (geoWatchIdRef.current != null) {
@@ -116,18 +183,18 @@ function HomePage() {
     return () => window.removeEventListener("beforeunload", cleanup);
   }, []);
 
-  // Paneles / Modales y refs de botones (para anclar)
+  // Paneles / Modales y refs
   const [reportOpen, setReportOpen] = useState(false);
   const [reportAnchorRect, setReportAnchorRect] = useState(null);
-  const reportBtnRef = useRef(null); // botón superior "Reporte"
+  const reportBtnRef = useRef(null);
 
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoAnchorRect, setInfoAnchorRect] = useState(null);
-  const infoBtnRef = useRef(null); // FAB inferior "Info"
+  const infoBtnRef = useRef(null);
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
-  const reportFabRef = useRef(null); // FAB inferior "Reporte ciudadano"
+  const reportFabRef = useRef(null);
 
   // Helper fetch JSON
   const fetchJson = useCallback(async (url, options = {}) => {
@@ -147,7 +214,7 @@ function HomePage() {
     }
   }, []);
 
-  // Cargar estados de zonas (PRIORIDAD)
+  // Cargar estados de zonas
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -160,7 +227,6 @@ function HomePage() {
           mapping[name] = info?.state || "red";
         });
         setZoneStates(mapping);
-        // marcar states listos si hay contenido
         if (Object.keys(mapping).length > 0) setStatesReady(true);
       }
     } catch (e) {
@@ -170,7 +236,6 @@ function HomePage() {
     }
   }, [fetchJson]);
 
-  // Si estados vinieron por MapComponent (onZoneStatesLoad), también marcar ready
   useEffect(() => {
     if (zoneStates && Object.keys(zoneStates).length > 0) setStatesReady(true);
   }, [zoneStates]);
@@ -186,8 +251,8 @@ function HomePage() {
     if (Array.isArray(loadedZones)) setZones(loadedZones);
   };
 
-  // ALERTAS visibles (SVG atención) — retrasadas y menos frecuentes
-  const ALERTS_POLL_MS = 120000; // 2 minutos
+  // ALERTAS visibles (poll suave)
+  const ALERTS_POLL_MS = 120000;
   const alertsIntervalRef = useRef(null);
 
   const loadAlerts = useCallback(async () => {
@@ -209,7 +274,7 @@ function HomePage() {
         );
       }
     } catch {
-      // silencio: no bloquear la UI ni saturar logs
+      // silencio
     }
   }, [fetchJson]);
 
@@ -237,7 +302,7 @@ function HomePage() {
     }
   }, []);
 
-  // Iniciar/pausar polling de alertas SOLO cuando states+map estén listos
+  // Iniciar/pausar polling de alertas
   useEffect(() => {
     if (alertsIntervalRef.current) {
       clearInterval(alertsIntervalRef.current);
@@ -280,7 +345,7 @@ function HomePage() {
     };
   }, [statesReady, mapSettled, loadAlerts]);
 
-  // --------- Anclaje: recalcular posición al abrir, resize o scroll ----------
+  // --------- Recalcular anclajes ----------
   const recalcAnchors = useCallback(() => {
     if (infoOpen && infoBtnRef.current) {
       setInfoAnchorRect(infoBtnRef.current.getBoundingClientRect());
@@ -304,7 +369,7 @@ function HomePage() {
     };
   }, [recalcAnchors]);
 
-  // UI handlers (siempre setear anchorRect ANTES de abrir)
+  // UI handlers
   const toggleReportPanel = () => {
     if (reportBtnRef.current)
       setReportAnchorRect(reportBtnRef.current.getBoundingClientRect());
@@ -326,9 +391,33 @@ function HomePage() {
   };
   const closeReportModal = () => setReportModalOpen(false);
 
-  // -------------------------------------------------------------------------
+  // --- Guard de seguridad: si MapComponent falla, mostramos un fallback
+  let mapUi = null;
+  try {
+    mapUi = (
+      <MapComponent
+        zones={zones}
+        zoneStates={zoneStates}
+        onZoneStatesLoad={(initialStates) =>
+          initialStates && setZoneStates(initialStates)
+        }
+        onZoneStateChange={handleZoneStateChange}
+        onZonesLoad={handleZonesLoad}
+        userLocation={userLocation}
+        alerts={alerts}
+      />
+    );
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("MapComponent error:", e);
+    mapUi = (
+      <div className="w-full h-screen grid place-items-center">
+        <div>Problema cargando el mapa.</div>
+      </div>
+    );
+  }
+
   // Render
-  // -------------------------------------------------------------------------
   return (
     <main
       id="main"
@@ -352,7 +441,7 @@ function HomePage() {
           {refreshing ? "Actualizando..." : "Actualizar Mapa"}
         </button>
 
-        {/* Botón que abre ReportHubPanel (panel de gestión/reportes) */}
+        {/* Botón que abre ReportHubPanel */}
         <button
           ref={reportBtnRef}
           onClick={toggleReportPanel}
@@ -363,18 +452,8 @@ function HomePage() {
         </button>
       </div>
 
-      {/* Mapa */}
-      <MapComponent
-        zones={zones}
-        zoneStates={zoneStates}
-        onZoneStatesLoad={(initialStates) =>
-          initialStates && setZoneStates(initialStates)
-        }
-        onZoneStateChange={handleZoneStateChange}
-        onZonesLoad={handleZonesLoad}
-        userLocation={userLocation}
-        alerts={alerts}
-      />
+      {/* Mapa (o fallback si falla) */}
+      {mapUi}
 
       {/* FABs inferior-izquierda */}
       <div
@@ -384,14 +463,11 @@ function HomePage() {
           left: "max(1rem, env(safe-area-inset-left, 1rem))",
         }}
       >
-        {/* Botón que abre InfoPanel (panel de info) */}
         <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
-
-        {/* FAB que abre ReportModal (reporte ciudadano) */}
         <ReportButton ref={reportFabRef} onClick={handleToggleReportModal} />
       </div>
 
-      {/* Paneles y modales anclados a SUS botones */}
+      {/* Paneles y modales anclados */}
       <ReportHubPanel
         open={reportOpen}
         anchorRect={reportAnchorRect}
@@ -410,7 +486,6 @@ function HomePage() {
         open={reportModalOpen}
         anchorRect={reportModalAnchorRect}
         onClose={closeReportModal}
-        /** geolocalización en vivo */
         userLocation={userLocation}
         startLiveLocation={startLiveLocation}
         geoError={geoError}
@@ -422,12 +497,12 @@ function HomePage() {
 }
 
 // ---------------------------------------------------------------------------
-// App con Router (lazy routes)
+// App con Router (lazy routes) + ErrorBoundary global
 // ---------------------------------------------------------------------------
 export default function App() {
   useBackendUrl(); // publica BACKEND_URL en window
 
-  // Registrar SW
+  // Registrar SW (no rompe si falla)
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       const onLoad = () =>
@@ -438,31 +513,37 @@ export default function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route
-          path="/admin"
-          element={
-            <Suspense fallback={null}>
-              <AdminPanel
-                onRefreshZoneStates={() => {}}
-                onBulkZoneStatesUpdate={() => {}}
-                onZoneStateChange={() => {}}
-              />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/admin/reportes"
-          element={
-            <Suspense fallback={null}>
-              <ReportsPanel />
-            </Suspense>
-          }
-        />
-        <Route path="*" element={<HomePage />} />
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <Suspense fallback={<FullPageFallback text="Cargando paneles…" />}>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route
+              path="/admin"
+              element={
+                <Suspense fallback={<FullPageFallback text="Cargando admin…" />}>
+                  <AdminPanel
+                    onRefreshZoneStates={() => {}}
+                    onBulkZoneStatesUpdate={() => {}}
+                    onZoneStateChange={() => {}}
+                  />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/admin/reportes"
+              element={
+                <Suspense
+                  fallback={<FullPageFallback text="Cargando reportes…" />}
+                >
+                  <ReportsPanel />
+                </Suspense>
+              }
+            />
+            <Route path="*" element={<HomePage />} />
+          </Routes>
+        </BrowserRouter>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
