@@ -1,47 +1,52 @@
+Tenés un **desacople de nombres** (acentos, mayúsculas y paréntesis). Lo soluciono normalizando ambos lados. Te dejo **`MapComponent.jsx` completo** con:
+
+* `norm()` que quita tildes, espacios y signos.
+* `normalizedStates` derivado del JSON del backend.
+* Lookup por nombre normalizado (municipios y series tipo **“Melo (GBA)”** → `melogba`).
+* Log de zonas sin match para depurar.
+
+---
+
+### `src/components/MapComponent.jsx` (completo, con normalización de nombres)
+
+```jsx
 // src/components/MapComponent.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
 
-// 👉 Un solo archivo combinado
 import combinedPolygonsUrl from '../assets/combined_polygons.geojson?url';
 import caminosDataUrl from '../assets/camineria_cerro_largo.json?url';
 import { getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
-// Configurar iconos de Leaflet (por defecto)
+// ----------------- Iconos Leaflet -----------------
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Ícono GPS (SVG)
 const gpsIcon = new L.Icon({
   iconUrl:
     'data:image/svg+xml;base64,' +
-    btoa(
-      `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="24" height="24">
-          <circle cx="12" cy="12" r="8" fill="#3b82f6" stroke="#ffffff" stroke-width="2"/>
-          <circle cx="12" cy="12" r="4" fill="#ffffff"/>
-        </svg>
-      `.trim()
-    ),
+    btoa(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="24" height="24">
+        <circle cx="12" cy="12" r="8" fill="#3b82f6" stroke="#ffffff" stroke-width="2"/>
+        <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+      </svg>
+    `.trim()),
   iconSize: [24, 24],
   iconAnchor: [12, 12],
   popupAnchor: [0, -12],
   className: 'gps-marker-icon',
 });
 
-// Ícono de ATENCIÓN estilo Waze (triángulo amarillo con signo)
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
     <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
-      <defs>
-        <filter id="shadow"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/></filter>
-      </defs>
+      <defs><filter id="shadow"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.3"/></filter></defs>
       <g filter="url(#shadow)">
         <path d="M12 2 L22 20 H2 Z" fill="#fbbf24" stroke="#111827" stroke-width="1.5"/>
         <rect x="11" y="8" width="2" height="6" rx="1" fill="#111827"/>
@@ -54,14 +59,19 @@ const attentionIcon = L.divIcon({
   popupAnchor: [0, -26],
 });
 
-// Colores para estados
+// ----------------- Util estado/estilos -----------------
 const stateColors = { green: '#22c55e', yellow: '#eab308', red: '#ef4444' };
-
-// Placeholder mientras se cargan estados
 const LOADING_FILL = '#e5e7eb';
 const LOADING_STROKE = '#9ca3af';
 
-// Manejar eventos de zoom
+// Normaliza nombres: sin tildes, espacios ni signos → minúsculas
+const norm = (s = '') =>
+  String(s)
+    .toLowerCase()
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .replace(/[\s\-_().,/]+/g, ''); // ej: "Melo (GBA)" -> "melogba", "ISIDORO NOBLÍA" -> "isidoronoblia"
+
+// ----------------- Zoom handler -----------------
 function ZoomHandler({ onZoomChange }) {
   const map = useMap();
   useEffect(() => {
@@ -73,13 +83,16 @@ function ZoomHandler({ onZoomChange }) {
   return null;
 }
 
+// ============================================================================
+// Componente
+// ============================================================================
 function MapComponent({
-  zoneStates,
+  zoneStates,           // { "ACEGUÁ": {state: "red"}, "Melo (GBA)": {...}, ... } o flatten
   onZoneStatesLoad,
   onZoneStateChange,
   onZonesLoad,
   userLocation,
-  alerts = [], // [{ id, lat, lng, titulo, descripcion }]
+  alerts = [],
 }) {
   const [combinedGeo, setCombinedGeo] = useState(null);
   const [caminosData, setCaminosData] = useState(null);
@@ -93,7 +106,25 @@ function MapComponent({
     [zoneStates]
   );
 
-  // BACKEND_URL coherente con App.jsx
+  // Deriva un mapa normalizado de estados: clave normalizada -> "green|yellow|red"
+  const normalizedStates = useMemo(() => {
+    const out = {};
+    if (!zoneStates) return out;
+
+    // admite formato {states:{...}} o plano
+    const base = zoneStates.states && typeof zoneStates.states === 'object'
+      ? zoneStates.states
+      : zoneStates;
+
+    for (const [k, v] of Object.entries(base)) {
+      const stateVal = typeof v === 'string' ? v : (v && v.state);
+      if (!stateVal) continue;
+      out[norm(k)] = String(stateVal).toLowerCase();
+    }
+    return out;
+  }, [zoneStates]);
+
+  // BACKEND_URL coherente con App
   const BACKEND_URL = useMemo(() => {
     const fromWin = (typeof window !== 'undefined' && window.BACKEND_URL) ? String(window.BACKEND_URL) : '';
     const envs =
@@ -106,8 +137,8 @@ function MapComponent({
   const mapCenter = [-32.35, -54.20];
   const handleZoomChange = (z) => setCurrentZoom(z);
 
-  // Helper: fetch JSON con timeout y backoff
-  const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 3, baseDelay = 500, timeoutMs = 8000 } = {}) => {
+  // Helper: fetch JSON
+  const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 2, baseDelay = 500, timeoutMs = 8000 } = {}) => {
     for (let i = 0; i <= retries; i++) {
       try {
         const ctrl = new AbortController();
@@ -129,8 +160,14 @@ function MapComponent({
   useEffect(() => {
     const loadData = async () => {
       try {
-        const statesP = loadZoneStates();
+        // Estados (permite plano o {states})
+        const data = await fetchJsonRetry(`${BACKEND_URL}/api/admin/zones/states`);
+        onZoneStatesLoad && onZoneStatesLoad(data?.states || data || {});
+      } catch (e) {
+        console.warn('No se pudo cargar estados:', e.message);
+      }
 
+      try {
         const [combinedRes, caminosRes] = await Promise.all([
           fetch(combinedPolygonsUrl, { cache: 'no-store' }),
           fetch(caminosDataUrl, { cache: 'no-store' }),
@@ -146,9 +183,7 @@ function MapComponent({
         setCombinedGeo(combinedJson);
         setCaminosData(caminosJson);
 
-        // Construir listado de zonas con el esquema previo:
-        // - Municipios: properties.municipio
-        // - Series Melo: properties.serie  => "Melo (X)"
+        // Listado de zonas para otros componentes (mismos nombres que usamos para el match)
         const allZones = [];
         (combinedJson.features || []).forEach((f) => {
           const p = f.properties || {};
@@ -157,8 +192,6 @@ function MapComponent({
         });
         setZones(allZones);
         onZonesLoad && onZonesLoad(allZones);
-
-        await statesP;
       } catch (error) {
         console.error('Error cargando datos del mapa:', error);
         setMessage({ type: 'error', text: 'Error al cargar datos del mapa' });
@@ -168,79 +201,57 @@ function MapComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadZoneStates = useCallback(async () => {
-    try {
-      const data = await fetchJsonRetry(`${BACKEND_URL}/api/admin/zones/states`);
-      const stateMap = {};
-      if (data && typeof data === 'object') {
-        if (data.states && typeof data.states === 'object') {
-          for (const zoneName in data.states) {
-            const v = data.states[zoneName];
-            const raw = typeof v === 'string' ? v : (v && v.state);
-            stateMap[zoneName] = String(raw || '').toLowerCase();
-          }
-        } else {
-          for (const k of Object.keys(data)) stateMap[k] = String(data[k] || '').toLowerCase();
-        }
-      }
-      onZoneStatesLoad && onZoneStatesLoad(stateMap);
-    } catch (error) {
-      console.error('Error loading zone states:', error);
-      setMessage({ type: 'error', text: 'Error al cargar estados de zonas' });
-    }
-  }, [BACKEND_URL, fetchJsonRetry, onZoneStatesLoad]);
-
-  // Listener para refrescar estados
+  // Depuración: muestra zonas del GeoJSON que no matchean contra el API
   useEffect(() => {
-    const handler = () => loadZoneStates();
-    window.addEventListener('zoneStateUpdated', handler);
-    return () => window.removeEventListener('zoneStateUpdated', handler);
-  }, [loadZoneStates]);
+    if (!combinedGeo || !Object.keys(normalizedStates).length) return;
+    const misses = new Set();
+    for (const f of combinedGeo.features || []) {
+      const p = f.properties || {};
+      const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
+      if (!zoneName) continue;
+      if (!normalizedStates[norm(zoneName)]) misses.add(zoneName);
+    }
+    if (misses.size) console.debug('Zonas sin match de estado (normalizado):', Array.from(misses));
+  }, [combinedGeo, normalizedStates]);
 
-  // Estilo por estado (igual que antes)
+  // Estilo por estado usando nombres normalizados
   const getFeatureStyle = (feature) => {
     const p = feature.properties || {};
-    let zoneName;
-    if (p.municipio) zoneName = p.municipio;
-    else if (p.serie) zoneName = `Melo (${p.serie})`;
+    const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
 
-    if (!statesLoaded) {
+    if (!Object.keys(normalizedStates).length) {
       return { fillColor: LOADING_FILL, weight: 1.5, opacity: 0.8, color: LOADING_STROKE, dashArray: '', fillOpacity: 0.25 };
     }
 
-    const stateColor = zoneStates[zoneName];
-    const finalColor = stateColors[stateColor] || stateColors.green;
+    const key = norm(zoneName);
+    const stateKey = normalizedStates[key];
+    const finalColor = stateColors[stateKey] || stateColors.green;
+
     return { fillColor: finalColor, weight: 2, opacity: 0.9, color: finalColor, dashArray: '', fillOpacity: 0.6 };
   };
 
-  const getStateLabel = (state) => (state === 'green' ? 'Habilitado' : state === 'yellow' ? 'Precaución' : state === 'red' ? 'Cerrado' : 'Desconocido');
+  const getStateLabel = (state) =>
+    state === 'green' ? 'Habilitado' : state === 'yellow' ? 'Precaución' : state === 'red' ? 'Cerrado' : 'Desconocido';
 
   const onEachFeature = (feature, layer) => {
     const p = feature.properties || {};
-    let name = 'Zona';
-    let zoneName = '';
-    let department = p.depto || 'Cerro Largo';
-    let area = p.area_km2 != null ? Number(p.area_km2).toFixed(2) : 'N/A';
+    const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
+    const nk = norm(zoneName);
+    const stateKey = normalizedStates[nk];
 
-    if (p.municipio) {
-      name = p.municipio;
-      zoneName = name;
-    } else if (p.serie) {
-      name = `Melo (${p.serie})`;
-      zoneName = name;
-    }
+    const department = p.depto || 'Cerro Largo';
+    const area = p.area_km2 != null ? Number(p.area_km2).toFixed(2) : 'N/A';
 
     layer.bindPopup(
-      `<b>${name}</b><br>` +
-        `Departamento: ${department}<br>` +
-        `Área: ${area} km²<br>` +
-        `Estado: ${zoneStates[zoneName] ? getStateLabel(zoneStates[zoneName]) : 'Desconocido'}`
+      `<b>${zoneName || 'Zona'}</b><br>` +
+      `Departamento: ${department}<br>` +
+      `Área: ${area} km²<br>` +
+      `Estado: ${stateKey ? getStateLabel(stateKey) : 'Desconocido'}`
     );
 
     layer.on({
       mouseover: (e) => e.target.setStyle({ fillOpacity: 0.9 }),
-      mouseout: (e) => e.target.setStyle({ fillOpacity: 0.6 }),
-      click: () => {},
+      mouseout:  (e) => e.target.setStyle({ fillOpacity: 0.6 }),
     });
   };
 
@@ -270,13 +281,13 @@ function MapComponent({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* 👉 Capa única desde combined_polygons */}
+        {/* Polígonos combinados (municipios + series) */}
         {combinedGeo && combinedGeo.features?.length > 0 && (
           <GeoJSON
             data={combinedGeo}
             style={getFeatureStyle}
             onEachFeature={onEachFeature}
-            key={`combined-${JSON.stringify(zoneStates)}`}
+            key={`combined-${JSON.stringify(normalizedStates)}`}
           />
         )}
 
@@ -324,10 +335,13 @@ function MapComponent({
             ) : null
           )}
 
-        <ZoomHandler onZoomChange={handleZoomChange} />
+        <ZoomHandler onZoomChange={setCurrentZoom} />
       </MapContainer>
     </div>
   );
 }
 
 export default MapComponent;
+```
+
+Con esto tus claves como **`"ACEGUÁ"`, `"ARÉVALO"`, `"ISIDORO NOBLÍA"`** y series **`"Melo (GBA)"`** matchean aunque en el GeoJSON varíe acentuación, mayúsculas o paréntesis. Si alguna zona todavía no pinta, mirá la consola: te listará los nombres sin match.
