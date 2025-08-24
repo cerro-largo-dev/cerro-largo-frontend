@@ -55,7 +55,11 @@ function HomePage() {
   const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ALERTAS (visibles) — se activan recién cuando mapa+states están listos
   const [alerts, setAlerts] = useState([]);
+  const [statesReady, setStatesReady] = useState(false);
+  const [mapSettled, setMapSettled] = useState(false);
 
   // Geolocalización en vivo
   const geoWatchIdRef = useRef(null);
@@ -87,9 +91,7 @@ function HomePage() {
   useEffect(() => {
     const cleanup = () => {
       if (geoWatchIdRef.current != null) {
-        try {
-          navigator.geolocation.clearWatch(geoWatchIdRef.current);
-        } catch {}
+        try { navigator.geolocation.clearWatch(geoWatchIdRef.current); } catch {}
         geoWatchIdRef.current = null;
       }
     };
@@ -124,7 +126,7 @@ function HomePage() {
     }
   }, []);
 
-  // Cargar estados de zonas
+  // Cargar estados de zonas (PRIORIDAD)
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -135,6 +137,8 @@ function HomePage() {
           mapping[name] = info?.state || "red";
         });
         setZoneStates(mapping);
+        // marcar states listos si hay contenido
+        if (Object.keys(mapping).length > 0) setStatesReady(true);
       }
     } catch (e) {
       console.warn("No se pudo refrescar estados:", e.message);
@@ -142,6 +146,11 @@ function HomePage() {
       setRefreshing(false);
     }
   }, [fetchJson]);
+
+  // Si estados vinieron por MapComponent (onZoneStatesLoad), también marcar ready
+  useEffect(() => {
+    if (zoneStates && Object.keys(zoneStates).length > 0) setStatesReady(true);
+  }, [zoneStates]);
 
   const handleZoneStateChange = (zoneName, newStateEn) => {
     setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
@@ -154,7 +163,10 @@ function HomePage() {
     if (Array.isArray(loadedZones)) setZones(loadedZones);
   };
 
-  // Alertas visibles
+  // ALERTAS visibles (SVG atención) — retrasadas y menos frecuentes
+  const ALERTS_POLL_MS = 120000; // 2 minutos
+  const alertsIntervalRef = useRef(null);
+
   const loadAlerts = useCallback(async () => {
     try {
       const json = await fetchJson(`${window.BACKEND_URL}/api/reportes/visibles`);
@@ -171,14 +183,81 @@ function HomePage() {
             }))
         );
       }
-    } catch {}
+    } catch {
+      // silencio: no bloquear la UI ni saturar logs
+    }
   }, [fetchJson]);
 
+  // Esperar a que el mapa “asiente” (carga inicial de página + frame ocioso)
   useEffect(() => {
-    loadAlerts();
-    const t = setInterval(loadAlerts, 30000);
-    return () => clearInterval(t);
-  }, [loadAlerts]);
+    const markSettledSoon = () => setMapSettled(true);
+    if (document.readyState === "complete") {
+      // pequeño idle para dejar pintar el mapa
+      if ("requestIdleCallback" in window) {
+        // @ts-ignore
+        window.requestIdleCallback(markSettledSoon, { timeout: 1500 });
+      } else {
+        setTimeout(markSettledSoon, 1500);
+      }
+    } else {
+      const onLoad = () => {
+        if ("requestIdleCallback" in window) {
+          // @ts-ignore
+          window.requestIdleCallback(markSettledSoon, { timeout: 1500 });
+        } else {
+          setTimeout(markSettledSoon, 1500);
+        }
+      };
+      window.addEventListener("load", onLoad, { once: true });
+      return () => window.removeEventListener("load", onLoad);
+    }
+  }, []);
+
+  // Iniciar/pausar polling de alertas SOLO cuando states+map estén listos
+  useEffect(() => {
+    // limpiar cualquier intervalo previo
+    if (alertsIntervalRef.current) {
+      clearInterval(alertsIntervalRef.current);
+      alertsIntervalRef.current = null;
+    }
+
+    if (!(statesReady && mapSettled)) return; // prioridad a states
+
+    let stopped = false;
+
+    const start = async () => {
+      await loadAlerts(); // primera carga (ya con todo listo)
+      if (stopped) return;
+      alertsIntervalRef.current = setInterval(loadAlerts, ALERTS_POLL_MS);
+    };
+
+    // pausar cuando la pestaña no está visible; reanudar al volver
+    const onVis = async () => {
+      if (document.visibilityState === "hidden") {
+        if (alertsIntervalRef.current) {
+          clearInterval(alertsIntervalRef.current);
+          alertsIntervalRef.current = null;
+        }
+      } else {
+        await loadAlerts();
+        if (!alertsIntervalRef.current) {
+          alertsIntervalRef.current = setInterval(loadAlerts, ALERTS_POLL_MS);
+        }
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", onVis);
+      if (alertsIntervalRef.current) {
+        clearInterval(alertsIntervalRef.current);
+        alertsIntervalRef.current = null;
+      }
+    };
+  }, [statesReady, mapSettled, loadAlerts]);
 
   // --------- Anclaje: recalcular posición al abrir, resize o scroll ----------
   const recalcAnchors = useCallback(() => {
