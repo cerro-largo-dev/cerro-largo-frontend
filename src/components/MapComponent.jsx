@@ -31,24 +31,29 @@ const gpsIcon = new L.Icon({
   className: 'gps-marker-icon',
 });
 
-// --------- Ícono de ATENCIÓN (discreto, borde suave, esquinas redondeadas) ---------
+// --------- Ícono de ATENCIÓN (triángulo sutil, bordes redondeados) ---------
 const ICON_SIZE = 28;
 const attentionIcon = L.divIcon({
   className: 'attention-pin',
   html: `
     <svg xmlns="http://www.w3.org/2000/svg" width="${ICON_SIZE}" height="${ICON_SIZE}" viewBox="0 0 24 24" aria-hidden="true">
-      <!-- Cuerpo con esquinas redondeadas -->
-      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"
-            fill="#FDE68A" stroke="#F59E0B" stroke-opacity="0.55" stroke-width="1.25"/>
-      <!-- Signo de exclamación, menos contrastado -->
-      <rect x="11" y="7" width="2" height="7" rx="1"
-            fill="#92400E" fill-opacity="0.85"/>
-      <circle cx="12" cy="16.5" r="1.1"
-              fill="#92400E" fill-opacity="0.85"/>
+      <!-- Triángulo: relleno suave y borde sutil con uniones redondeadas -->
+      <path d="M12 3 L21 20 H3 Z"
+            fill="#FDE68A"
+            stroke="#F59E0B"
+            stroke-opacity="0.5"
+            stroke-width="1.6"
+            stroke-linejoin="round"
+            stroke-linecap="round" />
+      <!-- Signo de exclamación más oscuro para mejor legibilidad -->
+      <rect x="11" y="8" width="2" height="7" rx="1"
+            fill="#7C2D12" fill-opacity="0.8" />
+      <circle cx="12" cy="16.5" r="1.2"
+              fill="#7C2D12" fill-opacity="0.8" />
     </svg>
   `,
   iconSize: [ICON_SIZE, ICON_SIZE],
-  iconAnchor: [ICON_SIZE / 2, ICON_SIZE - 4],
+  iconAnchor: [ICON_SIZE / 2, ICON_SIZE - 2], // apoya en la base del triángulo
   popupAnchor: [0, -(ICON_SIZE - 8)],
 });
 
@@ -191,7 +196,7 @@ function MapComponent({
     return () => { if (typeof window !== 'undefined') delete (window).forceZoneStatesReload; };
   }, [hardReloadStates]);
 
-  // Carga inicial: estados + assets
+  // Carga inicial: estados (prioridad) + assets de mapa
   useEffect(() => {
     let cancelled = false;
 
