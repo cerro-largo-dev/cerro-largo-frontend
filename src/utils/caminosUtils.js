@@ -3,6 +3,9 @@
  */
 import * as turf from '@turf/turf';
 
+/** Umbral de zoom para mostrar/consultar caminería */
+export const ROAD_VIS_THRESHOLD = 12;
+
 /**
  * Extrae todas las líneas (arrays de coords) de una geometría GeoJSON.
  * Soporta: Feature, LineString, MultiLineString, GeometryCollection.
@@ -57,7 +60,6 @@ export const calculateRoadLength = (geomOrFeature) => {
         totalKm += turf.length(line, { units: 'kilometers' });
       }
     }
-    // No redondeamos aquí; dejamos el número crudo para formateo flexible
     return totalKm;
   } catch (err) {
     console.error('Error calculando longitud del camino:', err);
@@ -82,9 +84,7 @@ export const formatLength = (lengthKm) => {
 };
 
 /**
- * Obtiene el color base del mapa oscurecido para los caminos
- * @param {string} baseColor - Color base en formato hex
- * @returns {string} - Color oscurecido
+ * Oscurece un color base (hex) para usar en caminos
  */
 export const getDarkenedColor = (baseColor = '#8B5CF6') => {
   const hex = baseColor.replace('#', '');
@@ -185,11 +185,7 @@ export const getRoadStyle = (feature, zoomLevel = 10) => {
   };
 };
 
-/**
- * Crea una función de estilo que se actualiza con el zoom
- * @param {Object} map - Instancia del mapa de Leaflet
- * @returns {Function} - Función de estilo para GeoJSON
- */
+/** Crea función de estilo sensible al zoom */
 export const createResponsiveRoadStyle = (map) => {
   return (feature) => {
     const currentZoom = map ? map.getZoom() : 10;
@@ -198,10 +194,7 @@ export const createResponsiveRoadStyle = (map) => {
 };
 
 /**
- * Genera el contenido del popup para un camino (mismo formato que municipios),
- * mostrando la longitud en metros o km según corresponda.
- * @param {Object} feature - Feature GeoJSON del camino
- * @returns {string} - HTML del popup
+ * Popup de caminos con longitud (metros o km)
  */
 export const getRoadPopupContent = (feature) => {
   const props = feature?.properties ?? {};
@@ -225,9 +218,7 @@ export const getRoadPopupContent = (feature) => {
 };
 
 /**
- * Configura eventos para cada feature de camino con mejor detección de clics
- * @param {Object} feature - Feature GeoJSON
- * @param {Object} layer - Layer de Leaflet
+ * Eventos por feature de camino con mejor detección de clics
  */
 export const onEachRoadFeature = (feature, layer) => {
   // Popup
