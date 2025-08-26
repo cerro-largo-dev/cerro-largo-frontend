@@ -6,12 +6,7 @@ import L from 'leaflet';
 import combinedPolygonsUrl from '../assets/combined_polygons.geojson?url';
 // Caminería se importará LAZY cuando el zoom alcance el umbral
 
-import {
-  ROAD_VIS_THRESHOLD,
-  getRoadStyle,
-  onEachRoadFeature,
-  createRoadSelectionManager, // ← agregado
-} from '../utils/caminosUtils';
+import { ROAD_VIS_THRESHOLD, getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
 
 // ----------------- Iconos Leaflet por defecto -----------------
 delete L.Icon.Default.prototype._getIconUrl;
@@ -80,26 +75,23 @@ function ZoomHandler({ onZoomChange }) {
 // Componente
 // ============================================================================
 function MapComponent({
-  zoneStates,
+  zoneStates,           // mapeo recibido desde App (plano o {states:{...}})
   onZoneStatesLoad,
   onZoneStateChange,
   onZonesLoad,
   userLocation,
-  alerts = [],
+  alerts = [],          // [{ id, lat, lng, titulo, descripcion }]
 }) {
   const [combinedGeo, setCombinedGeo] = useState(null);
 
   // Caminería (carga diferida)
-  const [roadsUrl, setRoadsUrl] = useState(null);
-  const [caminosData, setCaminosData] = useState(null);
+  const [roadsUrl, setRoadsUrl] = useState(null);        // URL del asset (tras import dinámico)
+  const [caminosData, setCaminosData] = useState(null);  // GeoJSON ya parseado
 
   const [zones, setZones] = useState([]);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [currentZoom, setCurrentZoom] = useState(9);
   const mapRef = useRef(null);
-
-  // Manager de selección de caminos
-  const roadSelRef = useRef(null);
 
   // flags/refs para reintentos de estados
   const hasStatesRef = useRef(false);
@@ -111,6 +103,7 @@ function MapComponent({
     [zoneStates]
   );
 
+  // Deriva un mapa normalizado: clave normalizada -> "green|yellow|red"
   const normalizedStates = useMemo(() => {
     const out = {};
     if (!zoneStates) return out;
@@ -127,6 +120,7 @@ function MapComponent({
     return out;
   }, [zoneStates]);
 
+  // BACKEND_URL coherente con App
   const BACKEND_URL = useMemo(() => {
     const fromWin = (typeof window !== 'undefined' && window.BACKEND_URL) ? String(window.BACKEND_URL) : '';
     const envs =
@@ -162,10 +156,12 @@ function MapComponent({
     return `${BACKEND_URL}/api/admin/zones/states${noCache ? `?__ts=${Date.now()}` : ''}`;
   }, [BACKEND_URL]);
 
+  // Carga de estados (doble: normal y no-cache)
   const loadZoneStates = useCallback(async ({ forceNoCache = false } = {}) => {
     const url = statesUrl(!!forceNoCache);
     const data = await fetchJsonRetry(url);
 
+    // Normalizar API -> mapa plano {name: "green|yellow|red"}
     const stateMap = {};
     if (data && typeof data === 'object') {
       const src = data.states && typeof data.states === 'object' ? data.states : data;
@@ -194,14 +190,16 @@ function MapComponent({
     return () => { if (typeof window !== 'undefined') delete (window).forceZoneStatesReload; };
   }, [hardReloadStates]);
 
-  // Carga inicial: estados + polígonos
+  // Carga inicial: estados (prioridad) + polígonos
   useEffect(() => {
     let cancelled = false;
 
     const start = async () => {
+      // Estados primero (doble)
       await hardReloadStates();
       if (cancelled) return;
 
+      // Reintentos si aún no hay estados
       if (!hasStatesRef.current) {
         const MAX_TRIES = 3;
         for (let i = 0; i < MAX_TRIES && !cancelled && !hasStatesRef.current; i++) {
@@ -215,6 +213,7 @@ function MapComponent({
         }
       }
 
+      // Polígonos (siempre)
       try {
         const combinedRes = await fetch(combinedPolygonsUrl, { cache: 'no-store' });
         if (!combinedRes.ok) throw new Error('GeoJSON polígonos no disponible');
@@ -224,6 +223,7 @@ function MapComponent({
 
         setCombinedGeo(combinedJson);
 
+        // Listado de zonas
         const allZones = [];
         (combinedJson.features || []).forEach((f) => {
           const p = f.properties || {};
@@ -246,16 +246,18 @@ function MapComponent({
       retryTimersRef.current.forEach(t => clearTimeout(t));
       retryTimersRef.current = [];
     };
-  }, [hardReloadStates]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // LAZY-LOAD de caminería
+  // LAZY-LOAD de caminería: importar URL y fetchear el JSON cuando el zoom supera el umbral
   useEffect(() => {
     let cancelled = false;
 
     const loadRoadsIfNeeded = async () => {
-      if (currentZoom < ROAD_VIS_THRESHOLD) return;
+      if (currentZoom < ROAD_VIS_THRESHOLD) return; // aún no
 
       try {
+        // 1) Import dinámico de la URL del asset (solo una vez)
         let url = roadsUrl;
         if (!url) {
           const mod = await import(/* @vite-ignore */ '../assets/camineria_cerro_largo.json?url');
@@ -264,6 +266,7 @@ function MapComponent({
           if (!cancelled) setRoadsUrl(url);
         }
 
+        // 2) Fetch + parse del GeoJSON (si aún no lo tenemos)
         if (!caminosData && url) {
           const res = await fetch(url, { cache: 'force-cache' });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -279,7 +282,7 @@ function MapComponent({
     return () => { cancelled = true; };
   }, [currentZoom, roadsUrl, caminosData]);
 
-  // Depuración: zonas sin match de estado
+  // Depuración: mostrar zonas del GeoJSON que no matchean contra el API
   useEffect(() => {
     if (!combinedGeo || !Object.keys(normalizedStates).length) return;
     const misses = new Set();
@@ -291,13 +294,14 @@ function MapComponent({
     if (misses.size) console.debug('Zonas sin match de estado (normalizado):', Array.from(misses));
   }, [combinedGeo, normalizedStates]);
 
+  // Estilo por estado usando nombres normalizados
   const getFeatureStyle = (feature) => {
     const p = feature.properties || {};
     const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
 
     if (!Object.keys(normalizedStates).length && !statesLoadedProp) {
       return { fillColor: LOADING_FILL, weight: 1.5, opacity: 0.8, color: LOADING_STROKE, dashArray: '', fillOpacity: 0.25 };
-      }
+    }
 
     const key = norm(zoneName);
     const stateKey = normalizedStates[key];
@@ -333,11 +337,6 @@ function MapComponent({
 
   const showRoads = currentZoom >= ROAD_VIS_THRESHOLD && caminosData && (caminosData.features?.length || 0) > 0;
 
-  // Wrapper para pasar el selectionManager al onEachRoadFeature
-  const onEachRoadFeatureWithSel = useCallback((feature, layer) => {
-    onEachRoadFeature(feature, layer, { selectionManager: roadSelRef.current });
-  }, []);
-
   return (
     <div className="w-full h-full">
       {/* Mensajes */}
@@ -357,12 +356,7 @@ function MapComponent({
         zoom={9}
         className="leaflet-container"
         style={{ width: '100%', height: '100%' }}
-        whenCreated={(m) => {
-          mapRef.current = m;
-          // Crear manager de selección y limpiar selección al clicar fuera
-          roadSelRef.current = createRoadSelectionManager(m, { keyFields: ['codigo','nombre'] });
-          m.on('click', () => roadSelRef.current && roadSelRef.current.clearSelection());
-        }}
+        whenCreated={(m) => (mapRef.current = m)}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -384,7 +378,7 @@ function MapComponent({
           <GeoJSON
             data={caminosData}
             style={(f) => getRoadStyle(f, currentZoom)}
-            onEachFeature={onEachRoadFeatureWithSel}  // ← pasa selectionManager
+            onEachFeature={onEachRoadFeature}
             key={`caminos-layer-zoom-${currentZoom}`}
             pathOptions={{ interactive: true, bubblingMouseEvents: false }}
           />
