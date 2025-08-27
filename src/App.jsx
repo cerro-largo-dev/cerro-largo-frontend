@@ -1,4 +1,4 @@
-// src/App-optimized.jsx — Versión optimizada con llamadas API paralelas
+// src/App.jsx — lazy routes para AdminPanel y ReportsPanel
 import React, {
   useCallback,
   useEffect,
@@ -22,15 +22,30 @@ const SiteBanner = lazy(() => import("./components/SiteBanner"));
 const AdminPanel = lazy(() => import("./components/AdminPanel"));
 const ReportsPanel = lazy(() => import("./components/ReportsPanel"));
 
-// Componente de loading optimizado
-const OptimizedSuspense = ({ children, fallback = null }) => (
-  <Suspense fallback={fallback}>{children}</Suspense>
-);
+// import AlertWidget from "./components/AlertWidget";
+
+// ❗ Lazy-loaded routes
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const ReportsPanel = lazy(() => import("./components/ReportsPanel"));
 
 // ---------------------------------------------------------------------------
-// Util: BACKEND_URL optimizado
+// Util: BACKEND_URL
 // ---------------------------------------------------------------------------
 function useBackendUrl() {
+  useEffect(() => {
+    const be =
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        (import.meta.env.VITE_REACT_APP_BACKEND_URL ||
+          import.meta.env.VITE_BACKEND_URL)) ||
+      (typeof process !== "undefined" &&
+        process.env &&
+        (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
+      "https://cerro-largo-backend.onrender.com";
+    if (typeof window !== "undefined")
+      window.BACKEND_URL = String(be).replace(/\/$/, "");
+  }, []);
+
   return useMemo(() => {
     const be =
       (typeof window !== "undefined" && window.BACKEND_URL) ||
@@ -42,171 +57,38 @@ function useBackendUrl() {
         process.env &&
         (process.env.REACT_APP_BACKEND_URL || process.env.VITE_BACKEND_URL)) ||
       "https://cerro-largo-backend.onrender.com";
-    
-    const url = String(be).replace(/\/$/, "");
-    if (typeof window !== "undefined") window.BACKEND_URL = url;
-    return url;
+    return String(be).replace(/\/$/, "");
   }, []);
 }
 
 // ---------------------------------------------------------------------------
-// Hook optimizado para llamadas API paralelas
-// ---------------------------------------------------------------------------
-function useParallelApiCalls(backendUrl) {
-  const [data, setData] = useState({
-    zoneStates: {},
-    zones: [],
-    alerts: [],
-    banner: null,
-    geoData: null
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchJson = useCallback(async (url, options = {}) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-    
-    try {
-      const res = await fetch(url, { 
-        credentials: "include", 
-        signal: controller.signal,
-        ...options 
-      });
-      clearTimeout(timeoutId);
-      
-      const ct = res.headers.get("content-type") || "";
-      const text = await res.text();
-      
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
-      }
-      
-      if (!ct.includes("application/json")) {
-        throw new Error(`No-JSON: ${text.slice(0, 200)}`);
-      }
-      
-      return JSON.parse(text);
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err.name === 'AbortError') {
-        throw new Error('Request timeout');
-      }
-      throw err;
-    }
-  }, []);
-
-  const loadAllData = useCallback(async () => {
-    if (!backendUrl) return;
-    
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Llamadas API paralelas para reducir latencia total
-      const [
-        zoneStatesResponse,
-        alertsResponse,
-        bannerResponse,
-        geoDataResponse
-      ] = await Promise.allSettled([
-        fetchJson(`${backendUrl}/api/zones/states`),
-        fetchJson(`${backendUrl}/api/reportes/visibles`),
-        fetchJson(`${backendUrl}/api/banner`),
-        fetch('/assets/combined_zones.geojson').then(r => r.json())
-      ]);
-
-      const newData = { ...data };
-
-      // Procesar zone states
-      if (zoneStatesResponse.status === 'fulfilled' && zoneStatesResponse.value?.success) {
-        const mapping = {};
-        Object.entries(zoneStatesResponse.value.states || {}).forEach(([name, info]) => {
-          mapping[name] = info?.state || "red";
-        });
-        newData.zoneStates = mapping;
-      }
-
-      // Procesar alerts
-      if (alertsResponse.status === 'fulfilled' && alertsResponse.value?.ok) {
-        newData.alerts = (alertsResponse.value.reportes || [])
-          .filter((a) => a.latitud != null && a.longitud != null)
-          .map((a) => ({
-            id: a.id,
-            lat: a.latitud,
-            lng: a.longitud,
-            titulo: a.nombre_lugar || "Reporte",
-            descripcion: a.descripcion || "",
-          }));
-      }
-
-      // Procesar banner
-      if (bannerResponse.status === 'fulfilled') {
-        newData.banner = bannerResponse.value;
-      }
-
-      // Procesar geo data
-      if (geoDataResponse.status === 'fulfilled') {
-        newData.geoData = geoDataResponse.value;
-        // Extraer zones del GeoJSON
-        if (geoDataResponse.value?.features) {
-          newData.zones = geoDataResponse.value.features.map(f => ({
-            name: f.properties?.name || f.properties?.NAME || 'Unknown',
-            ...f.properties
-          }));
-        }
-      }
-
-      setData(newData);
-    } catch (err) {
-      console.warn("Error loading data:", err.message);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [backendUrl, fetchJson]);
-
-  useEffect(() => {
-    loadAllData();
-  }, [loadAllData]);
-
-  return { data, loading, error, refetch: loadAllData };
-}
-
-// ---------------------------------------------------------------------------
-// Home Page optimizada
+// Home Page (Mapa)
 // ---------------------------------------------------------------------------
 function HomePage() {
-  const backendUrl = useBackendUrl();
-  const { data, loading, error, refetch } = useParallelApiCalls(backendUrl);
-  
-  // Estado local simplificado
+  useBackendUrl(); // publica BACKEND_URL en window
+
+  // Estado global
+  const [zoneStates, setZoneStates] = useState({});
+  const [zones, setZones] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ALERTAS (visibles) — se activan recién cuando mapa+states están listos
+  const [alerts, setAlerts] = useState([]);
+  const [statesReady, setStatesReady] = useState(false);
+  const [mapSettled, setMapSettled] = useState(false);
+
+  // Geolocalización en vivo
   const geoWatchIdRef = useRef(null);
   const [geoError, setGeoError] = useState("");
 
-  // Paneles y modales
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportAnchorRect, setReportAnchorRect] = useState(null);
-  const reportBtnRef = useRef(null);
-
-  const [infoOpen, setInfoOpen] = useState(false);
-  const [infoAnchorRect, setInfoAnchorRect] = useState(null);
-  const infoBtnRef = useRef(null);
-
-  const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
-  const reportFabRef = useRef(null);
-
-  // Geolocalización optimizada
   const startLiveLocation = useCallback(() => {
     if (!("geolocation" in navigator)) {
       setGeoError("La geolocalización no está soportada en este navegador");
       setUserLocation({ lat: -32.3667, lng: -54.1667 });
       return;
     }
-    if (geoWatchIdRef.current != null) return;
+    if (geoWatchIdRef.current != null) return; // ya mirando
 
     const id = navigator.geolocation.watchPosition(
       (pos) => {
@@ -214,15 +96,17 @@ function HomePage() {
         setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       () => {
-        setGeoError("No se pudo obtener GPS; usando ubicación aproximada de Cerro Largo.");
+        setGeoError(
+          "No se pudo obtener GPS; usando ubicación aproximada de Cerro Largo."
+        );
         setUserLocation({ lat: -32.3667, lng: -54.1667 });
       },
-      { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 } // Menos agresivo
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
     geoWatchIdRef.current = id;
   }, []);
 
-  // Limpieza de geolocalización
+  // Limpieza al cerrar/recargar la página (no al cerrar paneles)
   useEffect(() => {
     const cleanup = () => {
       if (geoWatchIdRef.current != null) {
@@ -236,208 +120,353 @@ function HomePage() {
     return () => window.removeEventListener("beforeunload", cleanup);
   }, []);
 
-  // Handlers optimizados
+  // Paneles / Modales y refs de botones (para anclar)
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportAnchorRect, setReportAnchorRect] = useState(null);
+  const reportBtnRef = useRef(null); // botón superior "Reporte"
+
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoAnchorRect, setInfoAnchorRect] = useState(null);
+  const infoBtnRef = useRef(null); // FAB inferior "Info"
+
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportModalAnchorRect, setReportModalAnchorRect] = useState(null);
+  const reportFabRef = useRef(null); // FAB inferior "Reporte ciudadano"
+
+  // Helper fetch JSON
+  const fetchJson = useCallback(async (url, options = {}) => {
+    const res = await fetch(url, { credentials: "include", ...options });
+    const ct = res.headers.get("content-type") || "";
+    const text = await res.text();
+    if (!res.ok)
+      throw new Error(
+        `HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`
+      );
+    if (!ct.includes("application/json"))
+      throw new Error(`No-JSON: ${text.slice(0, 200)}`);
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {};
+    }
+  }, []);
+
+  // Cargar estados de zonas (PRIORIDAD)
   const handleRefreshZoneStates = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refetch();
+      const data = await fetchJson(
+        `${window.BACKEND_URL}/api/admin/zones/states`
+      );
+      if (data?.success && data.states) {
+        const mapping = {};
+        Object.entries(data.states).forEach(([name, info]) => {
+          mapping[name] = info?.state || "red";
+        });
+        setZoneStates(mapping);
+        // marcar states listos si hay contenido
+        if (Object.keys(mapping).length > 0) setStatesReady(true);
+      }
+    } catch (e) {
+      console.warn("No se pudo refrescar estados:", e.message);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch]);
+  }, [fetchJson]);
 
-  const handleZoneStateChange = useCallback((zoneName, newStateEn) => {
-    // Optimistic update
-    setData(prev => ({
-      ...prev,
-      zoneStates: { ...prev.zoneStates, [zoneName]: newStateEn }
-    }));
+  // Si estados vinieron por MapComponent (onZoneStatesLoad), también marcar ready
+  useEffect(() => {
+    if (zoneStates && Object.keys(zoneStates).length > 0) setStatesReady(true);
+  }, [zoneStates]);
+
+  const handleZoneStateChange = (zoneName, newStateEn) => {
+    setZoneStates((prev) => ({ ...prev, [zoneName]: newStateEn }));
+  };
+  const handleBulkZoneStatesUpdate = (updatesMap) => {
+    if (!updatesMap || typeof updatesMap !== "object") return;
+    setZoneStates((prev) => ({ ...prev, ...updatesMap }));
+  };
+  const handleZonesLoad = (loadedZones) => {
+    if (Array.isArray(loadedZones)) setZones(loadedZones);
+  };
+
+  // ALERTAS visibles (SVG atención) — retrasadas y menos frecuentes
+  const ALERTS_POLL_MS = 120000; // 2 minutos
+  const alertsIntervalRef = useRef(null);
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      const json = await fetchJson(
+        `${window.BACKEND_URL}/api/reportes/visibles`
+      );
+      if (json?.ok && Array.isArray(json.reportes)) {
+        setAlerts(
+          json.reportes
+            .filter((a) => a.latitud != null && a.longitud != null)
+            .map((a) => ({
+              id: a.id,
+              lat: a.latitud,
+              lng: a.longitud,
+              titulo: a.nombre_lugar || "Reporte",
+              descripcion: a.descripcion || "",
+            }))
+        );
+      }
+    } catch {
+      // silencio: no bloquear la UI ni saturar logs
+    }
+  }, [fetchJson]);
+
+  // Esperar a que el mapa “asiente”
+  useEffect(() => {
+    const markSettledSoon = () => setMapSettled(true);
+    if (document.readyState === "complete") {
+      if ("requestIdleCallback" in window) {
+        // @ts-ignore
+        window.requestIdleCallback(markSettledSoon, { timeout: 1500 });
+      } else {
+        setTimeout(markSettledSoon, 1500);
+      }
+    } else {
+      const onLoad = () => {
+        if ("requestIdleCallback" in window) {
+          // @ts-ignore
+          window.requestIdleCallback(markSettledSoon, { timeout: 1500 });
+        } else {
+          setTimeout(markSettledSoon, 1500);
+        }
+      };
+      window.addEventListener("load", onLoad, { once: true });
+      return () => window.removeEventListener("load", onLoad);
+    }
   }, []);
 
-  // Polling de alertas optimizado (menos frecuente)
+  // Iniciar/pausar polling de alertas SOLO cuando states+map estén listos
   useEffect(() => {
-    if (loading || error) return;
-    
-    const interval = setInterval(() => {
-      // Solo recargar alertas, no todo
-      fetch(`${backendUrl}/api/reportes/visibles`)
-        .then(r => r.json())
-        .then(json => {
-          if (json?.ok && Array.isArray(json.reportes)) {
-            const alerts = json.reportes
-              .filter((a) => a.latitud != null && a.longitud != null)
-              .map((a) => ({
-                id: a.id,
-                lat: a.latitud,
-                lng: a.longitud,
-                titulo: a.nombre_lugar || "Reporte",
-                descripcion: a.descripcion || "",
-              }));
-            setData(prev => ({ ...prev, alerts }));
-          }
-        })
-        .catch(() => {}); // Silent fail
-    }, 180000); // 3 minutos
+    if (alertsIntervalRef.current) {
+      clearInterval(alertsIntervalRef.current);
+      alertsIntervalRef.current = null;
+    }
+    if (!(statesReady && mapSettled)) return;
 
-    return () => clearInterval(interval);
-  }, [backendUrl, loading, error]);
+    let stopped = false;
 
-  // Loading state mejorado
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mx-auto mb-4"></div>
-          <p className="text-slate-600">Cargando datos del sistema...</p>
-        </div>
-      </div>
-    );
-  }
+    const start = async () => {
+      await loadAlerts();
+      if (stopped) return;
+      alertsIntervalRef.current = setInterval(loadAlerts, ALERTS_POLL_MS);
+    };
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center max-w-md">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">Error de conexión</h2>
-          <p className="text-slate-600 mb-4">{error}</p>
-          <button 
-            onClick={refetch}
-            className="btn-primary"
-          >
-            Reintentar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-root">
-      {/* Banner con Suspense */}
-      <OptimizedSuspense>
-        <SiteBanner />
-      </OptimizedSuspense>
-
-      {/* Mapa principal con prioridad */}
-      <OptimizedSuspense 
-        fallback={
-          <div className="map-skeleton" aria-label="Cargando mapa...">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-slate-600">Inicializando mapa...</div>
-            </div>
-          </div>
+    const onVis = async () => {
+      if (document.visibilityState === "hidden") {
+        if (alertsIntervalRef.current) {
+          clearInterval(alertsIntervalRef.current);
+          alertsIntervalRef.current = null;
         }
-      >
-        <MapComponent
-          userLocation={userLocation}
-          onUserLocationRequest={startLiveLocation}
-          zoneStates={data.zoneStates}
-          onZoneStatesLoad={handleZoneStateChange}
-          zones={data.zones}
-          onZonesLoad={() => {}} // Ya cargado
-          alerts={data.alerts}
-          geoData={data.geoData}
-        />
-      </OptimizedSuspense>
+      } else {
+        await loadAlerts();
+        if (!alertsIntervalRef.current) {
+          alertsIntervalRef.current = setInterval(loadAlerts, ALERTS_POLL_MS);
+        }
+      }
+    };
 
-      {/* Botones y paneles con lazy loading */}
-      <OptimizedSuspense>
-        <ReportButton
+    start();
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", onVis);
+      if (alertsIntervalRef.current) {
+        clearInterval(alertsIntervalRef.current);
+        alertsIntervalRef.current = null;
+      }
+    };
+  }, [statesReady, mapSettled, loadAlerts]);
+
+  // --------- Anclaje: recalcular posición al abrir, resize o scroll ----------
+  const recalcAnchors = useCallback(() => {
+    if (infoOpen && infoBtnRef.current) {
+      setInfoAnchorRect(infoBtnRef.current.getBoundingClientRect());
+    }
+    if (reportOpen && reportBtnRef.current) {
+      setReportAnchorRect(reportBtnRef.current.getBoundingClientRect());
+    }
+    if (reportModalOpen && reportFabRef.current) {
+      setReportModalAnchorRect(reportFabRef.current.getBoundingClientRect());
+    }
+  }, [infoOpen, reportOpen, reportModalOpen]);
+
+  useEffect(() => {
+    const onResize = () => recalcAnchors();
+    const onScroll = () => recalcAnchors();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [recalcAnchors]);
+
+  // UI handlers (siempre setear anchorRect ANTES de abrir)
+  const toggleReportPanel = () => {
+    if (reportBtnRef.current)
+      setReportAnchorRect(reportBtnRef.current.getBoundingClientRect());
+    setReportOpen((v) => !v);
+  };
+  const closeReportPanel = () => setReportOpen(false);
+
+  const toggleInfo = () => {
+    if (infoBtnRef.current)
+      setInfoAnchorRect(infoBtnRef.current.getBoundingClientRect());
+    setInfoOpen((v) => !v);
+  };
+  const closeInfoPanel = () => setInfoOpen(false);
+
+  const handleToggleReportModal = () => {
+    if (reportFabRef.current)
+      setReportModalAnchorRect(reportFabRef.current.getBoundingClientRect());
+    setReportModalOpen((prev) => !prev);
+  };
+  const closeReportModal = () => setReportModalOpen(false);
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
+  return (
+    <main
+      id="main"
+      role="main"
+      tabIndex={-1}
+      className="relative w-full h-screen"
+      style={{ minHeight: "100vh" }}
+    >
+      <h1 className="sr-only">
+        Caminos que conectan – Gobierno de Cerro Largo
+      </h1>
+
+      {/* Barra superior */}
+      <div className="absolute top-4 right-4 z-[1000] flex gap-2">
+        <button
+          onClick={handleRefreshZoneStates}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-green-700 disabled:opacity-50"
+          disabled={refreshing}
+          title="Actualizar Mapa"
+        >
+          {refreshing ? "Actualizando..." : "Actualizar Mapa"}
+        </button>
+
+        {/* Botón que abre ReportHubPanel (panel de gestión/reportes) */}
+        <button
           ref={reportBtnRef}
-          onClick={() => {
-            const rect = reportBtnRef.current?.getBoundingClientRect();
-            setReportAnchorRect(rect || null);
-            setReportOpen(true);
-          }}
-        />
-      </OptimizedSuspense>
+          onClick={toggleReportPanel}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700"
+          title="Reporte"
+        >
+          Reporte
+        </button>
+      </div>
 
-      <OptimizedSuspense>
-        <InfoButton
-          ref={infoBtnRef}
-          onClick={() => {
-            const rect = infoBtnRef.current?.getBoundingClientRect();
-            setInfoAnchorRect(rect || null);
-            setInfoOpen(true);
-          }}
-        />
-      </OptimizedSuspense>
+      {/* Mapa */}
+      <MapComponent
+        zones={zones}
+        zoneStates={zoneStates}
+        onZoneStatesLoad={(initialStates) =>
+          initialStates && setZoneStates(initialStates)
+        }
+        onZoneStateChange={handleZoneStateChange}
+        onZonesLoad={handleZonesLoad}
+        userLocation={userLocation}
+        alerts={alerts}
+      />
 
-      {/* Paneles condicionales */}
-      {reportOpen && (
-        <OptimizedSuspense>
-          <ReportHubPanel
-            isOpen={reportOpen}
-            onClose={() => setReportOpen(false)}
-            anchorRect={reportAnchorRect}
-            onRefreshZoneStates={handleRefreshZoneStates}
-            refreshing={refreshing}
-            zoneStates={data.zoneStates}
-            onZoneStateChange={handleZoneStateChange}
-            zones={data.zones}
-          />
-        </OptimizedSuspense>
-      )}
+      {/* FABs inferior-izquierda */}
+      <div
+        className="fixed z-[1000] flex flex-col items-start gap-2"
+        style={{
+          bottom: "max(1rem, env(safe-area-inset-bottom, 1rem))",
+          left: "max(1rem, env(safe-area-inset-left, 1rem))",
+        }}
+      >
+        {/* Botón que abre InfoPanel (panel de info) */}
+        <InfoButton ref={infoBtnRef} onClick={toggleInfo} isOpen={infoOpen} />
 
-      {infoOpen && (
-        <OptimizedSuspense>
-          <InfoPanel
-            isOpen={infoOpen}
-            onClose={() => setInfoOpen(false)}
-            anchorRect={infoAnchorRect}
-          />
-        </OptimizedSuspense>
-      )}
+        {/* FAB que abre ReportModal (reporte ciudadano) */}
+        <ReportButton ref={reportFabRef} onClick={handleToggleReportModal} />
+      </div>
 
-      {reportModalOpen && (
-        <OptimizedSuspense>
-          <ReportModal
-            isOpen={reportModalOpen}
-            onClose={() => setReportModalOpen(false)}
-            anchorRect={reportModalAnchorRect}
-            userLocation={userLocation}
-          />
-        </OptimizedSuspense>
-      )}
+      {/* Paneles y modales anclados a SUS botones */}
+      <ReportHubPanel
+        open={reportOpen}
+        anchorRect={reportAnchorRect}
+        onClose={closeReportPanel}
+        buttonRef={reportBtnRef}
+      />
 
-      {geoError && (
-        <div className="fixed bottom-4 left-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded max-w-sm">
-          <p className="text-sm">{geoError}</p>
-        </div>
-      )}
-    </div>
+      <InfoPanel
+        open={infoOpen}
+        anchorRect={infoAnchorRect}
+        onClose={closeInfoPanel}
+        buttonRef={infoBtnRef}
+      />
+
+      <ReportModal
+        open={reportModalOpen}
+        anchorRect={reportModalAnchorRect}
+        onClose={closeReportModal}
+        /** geolocalización en vivo */
+        userLocation={userLocation}
+        startLiveLocation={startLiveLocation}
+        geoError={geoError}
+      />
+
+      <SiteBanner />
+    </main>
   );
 }
 
 // ---------------------------------------------------------------------------
-// App principal con rutas optimizadas
+// App con Router (lazy routes)
 // ---------------------------------------------------------------------------
-function App() {
+export default function App() {
+  useBackendUrl(); // publica BACKEND_URL en window
+
+  // Registrar SW
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      const onLoad = () =>
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      window.addEventListener("load", onLoad);
+      return () => window.removeEventListener("load", onLoad);
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route 
-          path="/admin" 
+        <Route
+          path="/admin"
           element={
-            <OptimizedSuspense fallback={<div>Cargando panel administrativo...</div>}>
-              <AdminPanel />
-            </OptimizedSuspense>
-          } 
+            <Suspense fallback={null}>
+              <AdminPanel
+                onRefreshZoneStates={() => {}}
+                onBulkZoneStatesUpdate={() => {}}
+                onZoneStateChange={() => {}}
+              />
+            </Suspense>
+          }
         />
-        <Route 
-          path="/reports" 
+        <Route
+          path="/admin/reportes"
           element={
-            <OptimizedSuspense fallback={<div>Cargando panel de reportes...</div>}>
+            <Suspense fallback={null}>
               <ReportsPanel />
-            </OptimizedSuspense>
-          } 
+            </Suspense>
+          }
         />
+        <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;
-
