@@ -1,13 +1,19 @@
 {
   "name": "cerro-largo-map",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vite --config vite.config-optimized.js",
+    "build": "vite build --config vite.config-optimized.js",
+    "build:analyze": "vite build --config vite.config-optimized.js && npx vite-bundle-analyzer dist/stats.html",
+    "preview": "vite preview --config vite.config-optimized.js",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "lint:fix": "eslint . --fix",
+    "optimize": "npm run build && npm run analyze-bundle",
+    "analyze-bundle": "npx webpack-bundle-analyzer dist/stats.json",
+    "test:lighthouse": "lighthouse http://localhost:4173 --output=json --output-path=./lighthouse-report.json",
+    "serve:optimized": "npm run build && npm run preview"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -73,10 +79,27 @@
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "tw-animate-css": "^1.2.9",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vite-bundle-analyzer": "^0.18.0",
+    "vite-plugin-pwa": "^0.21.1",
+    "workbox-window": "^7.3.0"
   },
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "pnpm@10.4.1"
+  "packageManager": "pnpm@10.4.1",
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11"
+  ],
+  "performance": {
+    "budget": {
+      "js": "500kb",
+      "css": "100kb",
+      "images": "1mb"
+    }
+  }
 }
+
