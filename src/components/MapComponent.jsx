@@ -10,7 +10,7 @@ import {
   ROAD_VIS_THRESHOLD,
   getRoadStyle,
   onEachRoadFeature,
-  createRoadSelectionManager, // selección por camino
+  createRoadSelectionManager,
 } from '../utils/caminosUtils';
 
 // ----------------- Iconos Leaflet por defecto -----------------
@@ -84,7 +84,7 @@ function ZoomHandler({ onZoomChange }) {
 function MapComponent({
   zoneStates,
   onZoneStatesLoad,
-  onZoneStateChange,
+  onZoneStateChange, // (no usado aquí pero lo dejo por compatibilidad)
   onZonesLoad,
   userLocation,
   alerts = [],
@@ -303,7 +303,7 @@ function MapComponent({
 
     if (!Object.keys(normalizedStates).length && !statesLoadedProp) {
       return { fillColor: LOADING_FILL, weight: 1.5, opacity: 0.8, color: LOADING_STROKE, dashArray: '', fillOpacity: 0.25 };
-      }
+    }
 
     const key = norm(zoneName);
     const stateKey = normalizedStates[key];
@@ -317,7 +317,6 @@ function MapComponent({
 
   const onEachFeature = (feature, layer) => {
     const p = feature.properties || {};
-    the:
     const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
     const nk = norm(zoneName);
     const stateKey = normalizedStates[nk];
@@ -398,7 +397,7 @@ function MapComponent({
           <GeoJSON
             data={caminosData}
             style={(f) => getRoadStyle(f, currentZoom)}
-            onEachFeature={onEachRoadFeatureWithSel}  // ← pasa selectionManager
+            onEachFeature={onEachRoadFeatureWithSel}
             key={`caminos-layer-zoom-${currentZoom}`}
             pathOptions={{ interactive: true, bubblingMouseEvents: false }}
           />
