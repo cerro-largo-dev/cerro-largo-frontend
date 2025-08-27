@@ -1,19 +1,10 @@
 services:
-  - type: web
-    runtime: static
+  - type: static_site
     name: cerro-largo-frontend
-    repo: https://github.com/cerro-largo-dev/cerro-largo-frontend
-    branch: master
-    autoDeployTrigger: commit
-    buildCommand: >
-      corepack enable &&
-      corepack use pnpm@9 &&
-      pnpm install --lockfile-only &&
-      pnpm install --frozen-lockfile &&
-      pnpm run build
-    staticPublishPath: dist
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
     envVars:
       - key: NODE_VERSION
-        value: 24.6.0
+        value: 20.18.0
       - key: VITE_API_URL
         value: https://cerro-largo-backend.onrender.com
