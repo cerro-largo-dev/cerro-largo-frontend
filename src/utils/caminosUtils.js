@@ -149,7 +149,7 @@ export const getDarkenedColor = (baseColor = '#8B5CF6') => {
  * @param {number} zoomLevel - Nivel de zoom actual del mapa (opcional)
  * @returns {Object} - Estilo de Leaflet
  */
-export const getRoadStyle = (feature, zoomLevel = 10) => {
+export const getRoadStyle = (feature, zoomLevel = 9) => {
   const properties = feature?.properties ?? {};
   const calzada = properties.calzada || '';
 
