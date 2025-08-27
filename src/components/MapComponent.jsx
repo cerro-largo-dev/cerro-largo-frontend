@@ -4,9 +4,8 @@ import { MapContainer, TileLayer, GeoJSON, useMap, Popup, Marker } from 'react-l
 import L from 'leaflet';
 
 import combinedPolygonsUrl from '../assets/combined_polygons.geojson?url';
-// Caminería se importará LAZY cuando el zoom alcance el umbral
 
-import { ROAD_VIS_THRESHOLD, getRoadStyle, onEachRoadFeature } from '../utils/caminosUtils';
+import { ROAD_VIS_THRESHOLD, getRoadStyle, onEachRoadFeature, REPORT_VIS_THRESHOLD } from '../utils/caminosUtils';
 
 // ----------------- Iconos Leaflet por defecto -----------------
 delete L.Icon.Default.prototype._getIconUrl;
@@ -336,6 +335,7 @@ function MapComponent({
   };
 
   const showRoads = currentZoom >= ROAD_VIS_THRESHOLD && caminosData && (caminosData.features?.length || 0) > 0;
+  const showReports = currentZoom >= REPORT_VIS_THRESHOLD;
 
   return (
     <div className="w-full h-full">
@@ -402,7 +402,7 @@ function MapComponent({
         )}
 
         {/* Alertas visibles */}
-        {Array.isArray(alerts) &&
+        {showReports && Array.isArray(alerts) &&
           alerts.map((a) =>
             a && a.lat != null && a.lng != null ? (
               <Marker key={a.id || `${a.lat}-${a.lng}`} position={[a.lat, a.lng]} icon={attentionIcon}>
@@ -424,3 +424,5 @@ function MapComponent({
 }
 
 export default MapComponent;
+
+
