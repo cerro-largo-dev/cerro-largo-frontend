@@ -11,16 +11,13 @@ import React, {
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./App.css";
 
-// Lazy loading más granular
 import MapComponent from "./components/MapComponent";
-const ReportButton = lazy(() => import("./components/Reportes/ReportButton"));
-const ReportModal = lazy(() => import("./components/Reportes/ReportModal"));
-const ReportHubPanel = lazy(() => import("./components/ReportHubPanel"));
-const InfoButton = lazy(() => import("./components/InfoButton"));
-const InfoPanel = lazy(() => import("./components/InfoPanel"));
-const SiteBanner = lazy(() => import("./components/SiteBanner"));
-
-
+import ReportButton from "./components/Reportes/ReportButton";
+import ReportModal from "./components/Reportes/ReportModal";
+import ReportHubPanel from "./components/ReportHubPanel";
+import InfoButton from "./components/InfoButton";
+import InfoPanel from "./components/InfoPanel";
+import SiteBanner from "./components/SiteBanner";
 // import AlertWidget from "./components/AlertWidget";
 
 // ❗ Lazy-loaded routes
