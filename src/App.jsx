@@ -19,8 +19,7 @@ const ReportHubPanel = lazy(() => import("./components/ReportHubPanel"));
 const InfoButton = lazy(() => import("./components/InfoButton"));
 const InfoPanel = lazy(() => import("./components/InfoPanel"));
 const SiteBanner = lazy(() => import("./components/SiteBanner"));
-const AdminPanel = lazy(() => import("./components/AdminPanel"));
-const ReportsPanel = lazy(() => import("./components/ReportsPanel"));
+
 
 // import AlertWidget from "./components/AlertWidget";
 
