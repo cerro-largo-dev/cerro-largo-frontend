@@ -273,3 +273,9 @@ export const onEachRoadFeature = (feature, layer) => {
     }
   });
 };
+
+
+/** Umbral de zoom para mostrar reportes ciudadanos */
+export const REPORT_VIS_THRESHOLD = 10;
+
+
