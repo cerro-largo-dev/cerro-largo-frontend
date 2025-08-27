@@ -4,7 +4,7 @@
 import * as turf from '@turf/turf';
 
 /** Umbral de zoom para mostrar/consultar caminería */
-export const ROAD_VIS_THRESHOLD = 12;
+export const ROAD_VIS_THRESHOLD = 10;
 
 /**
  * Extrae todas las líneas (arrays de coords) de una geometría GeoJSON.
