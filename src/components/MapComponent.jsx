@@ -70,6 +70,25 @@ function ZoomHandler({ onZoomChange }) {
   return null;
 }
 
+// ----------------- Helpers etiquetas -----------------
+const getZoneNameFromProps = (p = {}) => (p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : ''));
+
+// 3 letras (o serie p.ej. "GBA")
+const zoneAbbr3 = (zoneName = '') => {
+  const serie = zoneName.match(/\(([^)]+)\)/);
+  if (serie) return (serie[1] || '').replace(/[^A-Za-zÁÉÍÓÚÜÑ]/g, '').slice(0, 3).toUpperCase();
+  const cleaned = zoneName.replace(/\(.*?\)/g, '').trim();
+  const noDia = cleaned.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const firstWord = (noDia.split(/\s+/)[0] || '');
+  return firstWord.slice(0, 3).toUpperCase();
+};
+
+// Texto que se muestra según zoom
+const getLabelText = (zoneName, zoom) => (zoom >= 10 ? zoneName.toUpperCase() : zoneAbbr3(zoneName));
+
+// Tamaño de fuente según zoom (se nota desde lejos)
+const labelFontSizePx = (zoom) => Math.max(18, Math.min(72, Math.round(16 + (zoom - 7) * 6)));
+
 // ============================================================================
 // Componente
 // ============================================================================
@@ -334,6 +353,56 @@ function MapComponent({
     });
   };
 
+  // ---------- Etiquetas (nombres/abreviaturas) ----------
+  // Preparamos centros de cada feature para colocar un Marker/DivIcon
+  const labelAnchors = useMemo(() => {
+    if (!combinedGeo?.features?.length) return [];
+    return combinedGeo.features.map((f, i) => {
+      const p = f.properties || {};
+      const zoneName = getZoneNameFromProps(p);
+      if (!zoneName) return null;
+      // Centro aproximado del polígono vía bounds
+      const center = L.geoJSON(f).getBounds().getCenter();
+      return { id: i, zoneName, center };
+    }).filter(Boolean);
+  }, [combinedGeo]);
+
+  // Resolver color por estado (o gris si no hay)
+  const resolveZoneColor = useCallback((zoneName) => {
+    if (!Object.keys(normalizedStates).length && !statesLoadedProp) return LOADING_STROKE;
+    const key = norm(zoneName);
+    const stateKey = normalizedStates[key];
+    return stateColors[stateKey] || stateColors.green;
+  }, [normalizedStates, statesLoadedProp]);
+
+  // Crear DivIcon para etiqueta (texto grande del color de la zona)
+  const makeLabelIcon = useCallback((text, color, zoom) => {
+    const fontSize = labelFontSizePx(zoom);
+    return L.divIcon({
+      className: 'zone-label',
+      html: `
+        <div style="
+          pointer-events:none;
+          font-weight:800;
+          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
+          font-size:${fontSize}px;
+          line-height:1;
+          letter-spacing:1px;
+          color:${color};
+          opacity:0.9;
+          text-transform:uppercase;
+          text-shadow:
+            0 0 3px rgba(255,255,255,0.9),
+            0 0 6px rgba(255,255,255,0.8),
+            0 0 10px rgba(255,255,255,0.6);
+          white-space:nowrap;
+        ">${text}</div>
+      `,
+      iconSize: [0, 0], // se calcula por el contenido
+      iconAnchor: [0, 0],
+    });
+  }, []);
+
   const showRoads = currentZoom >= ROAD_VIS_THRESHOLD && caminosData && (caminosData.features?.length || 0) > 0;
   const showReports = currentZoom >= REPORT_VIS_THRESHOLD;
 
@@ -372,6 +441,24 @@ function MapComponent({
             key={`combined-${JSON.stringify(normalizedStates)}`}
           />
         )}
+
+        {/* Etiquetas grandes por municipio/serie */}
+        {labelAnchors.map(({ id, zoneName, center }) => {
+          const color = resolveZoneColor(zoneName);
+          const text = getLabelText(zoneName, currentZoom);
+          const icon = makeLabelIcon(text, color, currentZoom);
+          return (
+            <Marker
+              key={`label-${id}-${currentZoom}-${norm(zoneName)}`}
+              position={[center.lat, center.lng]}
+              icon={icon}
+              interactive={false}
+              bubblingMouseEvents={false}
+              keyboard={false}
+              opacity={1}
+            />
+          );
+        })}
 
         {/* Caminería (carga diferida y visible solo al acercar) */}
         {showRoads && (
@@ -424,5 +511,3 @@ function MapComponent({
 }
 
 export default MapComponent;
-
-
