@@ -3,18 +3,23 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+
+  "packageManager": "pnpm@9.0.0",
+  "engines": { "node": "24.6.0" },
+
   "scripts": {
     "dev": "vite --config vite.config-optimized.js",
     "build": "vite build --config vite.config-optimized.js",
     "build:analyze": "vite build --config vite.config-optimized.js && npx vite-bundle-analyzer dist/stats.html",
+    "analyze-bundle": "npx vite-bundle-analyzer dist/stats.html",
+    "optimize": "npm run build && npm run analyze-bundle",
     "preview": "vite preview --config vite.config-optimized.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "optimize": "npm run build && npm run analyze-bundle",
-    "analyze-bundle": "npx webpack-bundle-analyzer dist/stats.json",
-    "test:lighthouse": "lighthouse http://localhost:4173 --output=json --output-path=./lighthouse-report.json",
+    "test:lighthouse": "npx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse-report.json",
     "serve:optimized": "npm run build && npm run preview"
   },
+
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.10",
@@ -69,6 +74,7 @@
     "vaul": "^1.1.2",
     "zod": "^3.24.4"
   },
+
   "devDependencies": {
     "@eslint/js": "^9.25.0",
     "@types/react": "^19.1.2",
@@ -85,17 +91,13 @@
     "workbox-window": "^7.3.0"
   },
 
-  "engines": { "node": "24.6.0" },
-  "packageManager": "pnpm@9.0.0"
-
-  },
-  "packageManager": "pnpm@10.4.1",
   "browserslist": [
     "> 1%",
     "last 2 versions",
     "not dead",
     "not ie 11"
   ],
+
   "performance": {
     "budget": {
       "js": "500kb",
@@ -104,4 +106,3 @@
     }
   }
 }
-
