@@ -10,7 +10,7 @@ import {
   ROAD_VIS_THRESHOLD,
   getRoadStyle,
   onEachRoadFeature,
-  createRoadSelectionManager, // ← agregado
+  createRoadSelectionManager, // selección por camino
 } from '../utils/caminosUtils';
 
 // ----------------- Iconos Leaflet por defecto -----------------
@@ -63,7 +63,7 @@ const LOADING_STROKE = '#9ca3af';
 const norm = (s = '') =>
   String(s)
     .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/gu, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/gu, '')
     .replace(/[\s\-_().,/]+/g, ''); // "Melo (GBA)" -> "melogba"
 
 // ----------------- Zoom handler -----------------
@@ -98,6 +98,7 @@ function MapComponent({
   const [zones, setZones] = useState([]);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [currentZoom, setCurrentZoom] = useState(9);
+  const [useFallbackTiles, setUseFallbackTiles] = useState(false);
   const mapRef = useRef(null);
 
   // Manager de selección de caminos
@@ -139,8 +140,8 @@ function MapComponent({
   }, []);
 
   const mapCenter = [-32.35, -54.20];
-  
-  // Helper: fetch JSON con timeout/backoff
+
+  // Helper: fetch JSON con timeout/backoff (tolerante a content-type)
   const fetchJsonRetry = useCallback(async (url, opts = {}, { retries = 2, baseDelay = 500, timeoutMs = 8000 } = {}) => {
     for (let i = 0; i <= retries; i++) {
       try {
@@ -148,10 +149,9 @@ function MapComponent({
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         const res = await fetch(url, { credentials: 'include', cache: 'no-store', mode: 'cors', signal: ctrl.signal, ...opts });
         clearTimeout(timer);
-        const ct = res.headers.get('content-type') || '';
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        if (!ct.includes('application/json')) throw new Error('No-JSON');
-        return await res.json();
+        if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
+        const txt = await res.text();
+        try { return JSON.parse(txt); } catch { throw new Error(`JSON inválido @ ${url}`); }
       } catch (e) {
         if (i === retries) throw e;
         await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
@@ -218,9 +218,14 @@ function MapComponent({
 
       try {
         const combinedRes = await fetch(combinedPolygonsUrl, { cache: 'no-store' });
-        if (!combinedRes.ok) throw new Error('GeoJSON polígonos no disponible');
-
-        const combinedJson = await combinedRes.json();
+        let combinedJson;
+        if (combinedRes.ok) {
+          combinedJson = await combinedRes.json();
+        } else {
+          console.warn('Polígonos: respuesta no OK', combinedRes.status);
+          combinedJson = { type: 'FeatureCollection', features: [] }; // modo básico
+          setMessage({ type: 'error', text: 'No se pudieron cargar los polígonos (modo básico).' });
+        }
         if (cancelled) return;
 
         setCombinedGeo(combinedJson);
@@ -247,7 +252,7 @@ function MapComponent({
       retryTimersRef.current.forEach(t => clearTimeout(t));
       retryTimersRef.current = [];
     };
-  }, [hardReloadStates]);
+  }, [hardReloadStates, loadZoneStates]);
 
   // LAZY-LOAD de caminería
   useEffect(() => {
@@ -312,6 +317,7 @@ function MapComponent({
 
   const onEachFeature = (feature, layer) => {
     const p = feature.properties || {};
+    the:
     const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
     const nk = norm(zoneName);
     const stateKey = normalizedStates[nk];
@@ -368,7 +374,14 @@ function MapComponent({
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          eventHandlers={{ tileerror: () => setUseFallbackTiles(true) }}
         />
+        {useFallbackTiles && (
+          <TileLayer
+            attribution='&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          />
+        )}
 
         {/* Polígonos combinados (municipios + series) */}
         {combinedGeo && combinedGeo.features?.length > 0 && (
