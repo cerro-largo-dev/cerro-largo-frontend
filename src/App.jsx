@@ -12,7 +12,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./App.css";
 
 // Lazy loading más granular
-const MapComponent = lazy(() => import("./components/MapComponent"));
+import MapComponent from "./components/MapComponent";
 const ReportButton = lazy(() => import("./components/Reportes/ReportButton"));
 const ReportModal = lazy(() => import("./components/Reportes/ReportModal"));
 const ReportHubPanel = lazy(() => import("./components/ReportHubPanel"));
