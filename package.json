@@ -10,10 +10,10 @@
   "scripts": {
     "dev": "vite --config vite.config.js",
     "build": "vite build --config vite.config.js",
-    "build:analyze": "vite build --config vite.config.js && npx vite-bundle-analyzer dist/stats.html",
+    "build:a"build": "vite build --config vite.config.js",& npx vite-bundle-analyzer dist/stats.html",
     "analyze-bundle": "npx vite-bundle-analyzer dist/stats.html",
     "optimize": "npm run build && npm run analyze-bundle",
-    "preview": "vite preview --config vite.config.js",
+    "preview": "vite previte --config vite.config.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:lighthouse": "npx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse-report.json",
