@@ -80,9 +80,27 @@ return () => {
 
   // ---------- Formulario ----------
   const ZONE_ORDER = [
-    'ACEGUÁ','FRAILE MUERTO','RÍO BRANCO','TUPAMBAÉ','LAS CAÑAS','ISIDORO NOBLÍA','CERRO DE LAS CUENTAS',
-    'ARÉVALO','BAÑADO DE MEDINA','TRES ISLAS','LAGUNA MERÍN','CENTURIÓN','RAMÓN TRIGO','ARBOLITO',
-    'QUEBRACHO','PLÁCIDO ROSAS','Melo (GBA)','Melo (GBB)','Melo (GBC)','LA MICAELA','MANGRULLO'
+   'ACEGUÁ',
+  'ARBOLITO',
+  'ARÉVALO',
+  'BAÑADO DE MEDINA',
+  'CENTURIÓN',
+  'CERRO DE LAS CUENTAS',
+  'FRAILE MUERTO',
+  'ISIDORO NOBLÍA',
+  'LA MICAELA',
+  'LAGUNA MERÍN',
+  'LAS CAÑAS',
+  'MANGRULLO',
+  'PLÁCIDO ROSAS',
+  'QUEBRACHO',
+  'RAMÓN TRIGO',
+  'RÍO BRANCO',
+  'TRES ISLAS',
+  'TUPAMBAÉ',
+  'MELO (GBA)',
+  'MELO (GBB)',
+  'MELO (GBC)',
   ];
 
   const [phone, setPhone] = useState('');
