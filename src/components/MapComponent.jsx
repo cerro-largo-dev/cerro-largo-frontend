@@ -58,6 +58,12 @@ const norm = (s = '') =>
     .normalize('NFD').replace(/\p{Diacritic}/gu, '')
     .replace(/[\s\-_().,/]+/g, ''); // "Melo (GBA)" -> "melogba"
 
+// 🔁 NUEVO: mapeo de series a nombres finales
+const mapSerieToName = (s) =>
+  s === 'GEB' ? 'Mangrullo'
+  : s === 'GCB' ? 'La Micaela'
+  : `Melo (${s})`;
+
 // ----------------- Zoom handler -----------------
 function ZoomHandler({ onZoomChange }) {
   const map = useMap();
@@ -222,12 +228,12 @@ function MapComponent({
 
         setCombinedGeo(combinedJson);
 
-        // Listado de zonas
+        // Listado de zonas (usa mapeo de series)
         const allZones = [];
         (combinedJson.features || []).forEach((f) => {
           const p = f.properties || {};
           if (p.municipio) allZones.push(p.municipio);
-          else if (p.serie) allZones.push(`Melo (${p.serie})`);
+          else if (p.serie) allZones.push(mapSerieToName(p.serie));
         });
         setZones(allZones);
         onZonesLoad && onZonesLoad(allZones);
@@ -287,8 +293,9 @@ function MapComponent({
     const misses = new Set();
     for (const f of combinedGeo.features || []) {
       const p = f.properties || {};
-     const mapSerieToName = (s) => (s === 'GEB' ? 'Mangrullo' : s === 'GCB' ? 'La Micaela' : `Melo (${s})`);
-    const zoneName = p.municipio ? p.municipio : (p.serie ? mapSerieToName(p.serie) : '');
+      const zoneName = p.municipio ? p.municipio : (p.serie ? mapSerieToName(p.serie) : '');
+      const nk = norm(zoneName);
+      if (!normalizedStates[nk]) misses.add(zoneName);
     }
     if (misses.size) console.debug('Zonas sin match de estado (normalizado):', Array.from(misses));
   }, [combinedGeo, normalizedStates]);
@@ -296,7 +303,7 @@ function MapComponent({
   // Estilo por estado usando nombres normalizados
   const getFeatureStyle = (feature) => {
     const p = feature.properties || {};
-    const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
+    const zoneName = p.municipio ? p.municipio : (p.serie ? mapSerieToName(p.serie) : '');
 
     if (!Object.keys(normalizedStates).length && !statesLoadedProp) {
       return { fillColor: LOADING_FILL, weight: 1.5, opacity: 0.8, color: LOADING_STROKE, dashArray: '', fillOpacity: 0.25 };
@@ -314,7 +321,7 @@ function MapComponent({
 
   const onEachFeature = (feature, layer) => {
     const p = feature.properties || {};
-    const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
+    const zoneName = p.municipio ? p.municipio : (p.serie ? mapSerieToName(p.serie) : '');
     const nk = norm(zoneName);
     const stateKey = normalizedStates[nk];
 
@@ -424,5 +431,3 @@ function MapComponent({
 }
 
 export default MapComponent;
-
-
