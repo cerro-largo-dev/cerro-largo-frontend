@@ -287,8 +287,8 @@ function MapComponent({
     const misses = new Set();
     for (const f of combinedGeo.features || []) {
       const p = f.properties || {};
-      const zoneName = p.municipio ? p.municipio : (p.serie ? `Melo (${p.serie})` : '');
-      if (zoneName && !normalizedStates[norm(zoneName)]) misses.add(zoneName);
+     const mapSerieToName = (s) => (s === 'GEB' ? 'Mangrullo' : s === 'GCB' ? 'La Micaela' : `Melo (${s})`);
+    const zoneName = p.municipio ? p.municipio : (p.serie ? mapSerieToName(p.serie) : '');
     }
     if (misses.size) console.debug('Zonas sin match de estado (normalizado):', Array.from(misses));
   }, [combinedGeo, normalizedStates]);
