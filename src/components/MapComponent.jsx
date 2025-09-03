@@ -60,7 +60,7 @@ const norm = (s = '') =>
 
 // 🔁 NUEVO: mapeo de series a nombres finales
 const mapSerieToName = (s) =>
-  s === 'GEB' ? 'MANGRULO'
+  s === 'GEB' ? 'MANGRULLO'
   : s === 'GCB' ? 'LA MICAELA'
   : `Melo (${s})`;
 
